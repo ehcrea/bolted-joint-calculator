@@ -94,6 +94,7 @@
       btn.closest('dialog').close();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }));
+    $('#help-open').addEventListener('click', renderPcbHelp);
     const dlg = (btn, id) => $(btn).addEventListener('click', e => { e.preventDefault(); $(id).showModal(); });
     dlg('#about-open', '#about'); dlg('#about-link', '#about'); dlg('#help-open', '#help');
     renderLibs();
@@ -374,6 +375,42 @@
     stripRows.push(['F<sub>B</sub> = A<sub>S</sub>·R<sub>m</sub> (bolt breaks)', N(g.As, 1) + '·' + N(r.bc.Rm, 0), kN(s.Fbreak)]);
     step('Thread', 'Thread stripping', stripRows, 'The joint should fail by bolt fracture (visible, ductile), not by stripping: weakest thread ≥ F<sub>B</sub>.');
     return S.join('');
+  }
+
+  // ---------------- PCB section of the Help dialog (calculated from the standoff example) ----------------
+  const PCB_TORQUES = [0.3, 0.5, 0.6, 1.0];
+  function pcbCase(overrides) {
+    const p = PR.PRESETS.find(x => x.id === 'm3-pcb-standoff');
+    const s = Object.assign(clone(PR.DEFAULT), clone(p.s), overrides || {});
+    const fr = D.FRICTION[s.friction];
+    if (fr && !fr.custom) { s.muGmin = fr.muG[0]; s.muGmax = fr.muG[1]; s.muKmin = fr.muK[0]; s.muKmax = fr.muK[1]; }
+    return C.calculate(s);
+  }
+  function boardPressure(r) { return r.pressures.find(p => /FR-4/.test(p.mat)); }
+  function renderPcbHelp() {
+    const body = $('#pcb-table');
+    if (!body) return;
+    try {
+      body.innerHTML = PCB_TORQUES.map(MA => {
+        const r = pcbCase({ mode: 'torque', MA });
+        const bp = boardPressure(r);
+        const over = bp && bp.p > bp.pG;
+        const left = r.FVmin <= 0 ? '<span class="status error">none: can loosen</span>'
+          : f(r.FVmin / 1000, 2) + ' kN' + (over ? ', <span class="status error">board overloaded</span>' : '');
+        return `<tr><td class="left">${f(MA, 1)} N·m</td><td>${f(r.FMmin / 1000, 2)}–${f(r.FMmax / 1000, 2)} kN</td>` +
+          `<td${over ? ' class="status error"' : ''}>${bp ? f(bp.p, 0) : '—'} MPa</td><td>${left}</td></tr>`;
+      }).join('');
+      const ref = pcbCase({ mode: 'torque', MA: 0.6 });
+      const bare = pcbCase({ mode: 'torque', MA: 0.6, washer: 'none' });
+      const set = (k, v) => $$(`[data-pcb="${k}"]`).forEach(el => { el.textContent = v; });
+      set('phi', f(ref.PhiK, 2));
+      set('fz', f(ref.emb.fZum, 1));
+      set('nu', f(ref.nuActual * 100, 0));
+      set('nowasher', f(boardPressure(bare).p, 0));
+    } catch (e) {
+      console.error(e);
+      body.innerHTML = '<tr><td class="left" colspan="4">Could not calculate the table.</td></tr>';
+    }
   }
 
   // ---------------- libraries ----------------
