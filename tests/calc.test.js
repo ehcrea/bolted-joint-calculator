@@ -121,6 +121,18 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(r.FZ / r.FMmin > 0.3, 'M4 in thin sheets loses a large share of preload to embedding: ' + (r.FZ / r.FMmin));
 }
 
+// ---- clamp length ratio l_K/d: short joints lose more preload to settling and are flagged ----
+{
+  const short = C.calculate(stateFrom({ plates: [{ mat: 'S235', t: 4 }] }));   // M10: 4 mm + washers
+  const long = C.calculate(stateFrom({ plates: [{ mat: 'S235', t: 40 }] }));
+  near(short.lKd, short.lK / 10, 1e-9, 'lKd = lK / d');
+  ok(short.lKd < 1 && short.issues.some(i => i.level === 'warn' && /l<sub>K<\/sub>\/d/.test(i.text)), 'lK/d < 1 warns: ' + short.lKd);
+  ok(long.lKd >= 3 && !long.issues.some(i => /l<sub>K<\/sub>\/d = /.test(i.text)), 'lK/d >= 3 gives no clamp-length note: ' + long.lKd);
+  ok(short.FZ / short.FMmin > long.FZ / long.FMmin, 'shorter clamp length loses a larger share to embedding');
+  const mid = C.calculate(stateFrom({ plates: [{ mat: 'S235', t: 20 }] }));
+  ok(mid.lKd >= 1 && mid.lKd < 3 && mid.issues.some(i => i.level === 'info' && /l<sub>K<\/sub>\/d = /.test(i.text)), '1 <= lK/d < 3 gives a note: ' + mid.lKd);
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

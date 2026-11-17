@@ -18,6 +18,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Surface pressure** under the head, nut and washers against the limiting pressure p<sub>G</sub> of each material
 - **Thread stripping and engagement length** for a nut, a tapped hole, a **Heli-Coil** (wire thread insert, STI hole) or a **solid threaded insert**: strength of each thread against the bolt breaking load and the engagement length needed for the bolt to break first
 - **Bolt length** from clamp length and engagement, rounded to a standard length
+- **Clamp length ratio** l<sub>K</sub>/d with the share of preload lost to settling: a note below 3 (the common design rule, e.g. in semiconductor equipment) and a warning below 1
 
 ## Visuals
 

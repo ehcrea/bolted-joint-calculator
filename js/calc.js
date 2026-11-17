@@ -371,7 +371,11 @@
     if ((bc.stainless || bc.titanium) && layers.concat(strip.parent ? [{ m: strip.parent }] : []).some(l => l.m && (l.m.group === 'Aluminium' || l.m.group === 'Magnesium'))) add('info', 'Stainless or titanium fasteners in aluminium or magnesium: check galvanic corrosion in wet environments (<a href="https://ehcrea.github.io/galvanic-corrosion-checker/" target="_blank" rel="noopener">Galvanic Corrosion Checker</a>).');
     if (bc.stainless && inp.friction === 'ss-dry') add('warn', 'Dry stainless threads can gall (cold weld) during tightening. Use an anti-seize paste or a coated bolt.');
     if (DA > 0 && DA < dW) add('warn', 'D<sub>A</sub> is smaller than the head bearing diameter; the clamped part is treated as a sleeve.');
-    if (lK / d < 1) add('info', 'Short clamp length (l<sub>K</sub>/d < 1): the joint is stiff, embedding losses are large relative to the bolt elongation. Consider a longer bolt with a spacer sleeve.');
+    // Clamp length ratio: a short, stiff bolt stretches little, so settling of a few µm costs much of the preload.
+    // Common design rule (e.g. semiconductor equipment, vibration-loaded joints): l_K/d >= 3.
+    const lKd = lK / d, fzShare = fmtN(Math.min(FZ / FMmin, 1) * 100, 0);
+    if (lKd < 1) add('warn', 'Very short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' < 1): the bolt stretches little, so embedding costs ' + fzShare + ' % of the minimum preload. Use a longer bolt with a spacer sleeve or a stiff washer stack to reach l<sub>K</sub>/d ≥ 3.');
+    else if (lKd < 3) add('info', 'Short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' < 3): embedding costs ' + fzShare + ' % of the minimum preload. A longer bolt with a spacer sleeve (l<sub>K</sub>/d ≥ 3) makes the preload less sensitive to settling and vibration.');
     if (lK / d > 10) add('warn', 'Very long clamp length (l<sub>K</sub>/d > 10): the cone model and the resilience formulas lose accuracy.');
     if (inp.method === 'yield' || inp.method === 'angle') {
       if (inp.mode !== 'torque' && nu < 0.99) add('info', 'With yield- or angle-controlled tightening the bolt is tightened to its yield point: set ν = 1.0.');
@@ -385,7 +389,7 @@
 
     return {
       valid: true, status: worst, issues, checks,
-      thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, EP, alphaP, DA,
+      thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
       res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, deltaS, deltaP, pr },
       n, PhiK, Phi,

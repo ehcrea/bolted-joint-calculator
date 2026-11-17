@@ -233,7 +233,8 @@
       ['δ<sub>P</sub> parts', sci(r.res.deltaP) + ' mm/N', 'stiffness ' + f(1 / r.res.deltaP / 1000, 0) + ' kN/mm'],
       ['Φ<sub>K</sub> / Φ<sub>n</sub>', f(r.PhiK, 3) + ' / ' + f(r.Phi, 3), 'n = ' + f(r.n, 2)],
       ['F<sub>SA</sub> / F<sub>PA</sub>', f(r.FSA / 1000, 2) + ' / ' + f(r.FPA / 1000, 2) + ' kN', 'of F<sub>A</sub> = ' + f(r.FAmax / 1000, 2) + ' kN'],
-      ['Embedding f<sub>Z</sub>', f(r.emb.fZum, 1) + ' µm', 'F<sub>Z</sub> = ' + f(r.FZ / 1000, 2) + ' kN'],
+      ['Clamp ratio l<sub>K</sub>/d', f(r.lKd, 2), r.lKd >= 3 ? 'long enough (≥ 3)' : r.lKd < 1 ? '<span class="status warn">very short (&lt; 1): aim for ≥ 3</span>' : 'short (&lt; 3): sensitive to settling'],
+      ['Embedding f<sub>Z</sub>', f(r.emb.fZum, 1) + ' µm', 'F<sub>Z</sub> = ' + f(r.FZ / 1000, 2) + ' kN (' + f(Math.min(r.FZ / r.FMmin, 1) * 100, 0) + ' % of F<sub>M,min</sub>)'],
       ['Thermal ΔF<sub>Vth</sub>', f(r.dFth / 1000, 2) + ' kN', 'ΔT = ' + f(r.dT, 0) + ' K'],
     ]);
     $('#thread-detail').innerHTML = DR.threadDetail(r);
@@ -319,6 +320,7 @@
       ['δ<sub>M</sub> = l<sub>M</sub> / (E<sub>M</sub>·A<sub>N</sub>)', N(res.lM, 2) + ' / (' + N(res.EM, 0) + '·' + N(g.AN, 2) + ')', sci(res.dM) + ' mm/N'],
       ['<b>δ<sub>S</sub></b> = Σ δ<sub>i</sub>', '', '<b>' + sci(res.deltaS) + ' mm/N</b>'],
       ['l<sub>K</sub> = Σ l<sub>i</sub>; E<sub>P</sub> = l<sub>K</sub> / Σ(l<sub>i</sub>/E<sub>i</sub>)', 'l/E (mm/GPa): ' + lay, N(r.lK, 2) + ' mm; ' + N(r.EP / 1000, 1) + ' GPa'],
+      ['l<sub>K</sub>/d (aim for ≥ 3)', N(r.lK, 2) + ' / ' + N(r.thread.d, 0), N(r.lKd, 2)],
       ['tan φ<sub>' + (r.esv ? 'E' : 'D') + '</sub> = ' + (r.esv ? '0.348 + 0.013 ln β<sub>L</sub> + 0.193 ln y' : '0.362 + 0.032 ln(β<sub>L</sub>/2) + 0.153 ln y'), 'β<sub>L</sub> = l<sub>K</sub>/d<sub>W</sub> = ' + N(r.lK / r.dW, 3), N(res.pr.tanPhi, 3) + ' (φ = ' + N(res.pr.phi, 1) + '°)'],
       ['D<sub>A,Gr</sub> = d<sub>W</sub> + w·l<sub>K</sub>·tan φ', N(r.dW, 2) + ' + ' + res.pr.w + '·' + N(r.lK, 1) + '·' + N(res.pr.tanPhi, 3), N(res.pr.DAGr, 1) + ' mm → ' + res.pr.model],
       ['<b>δ<sub>P</sub></b> (cone' + (res.pr.model !== 'cone' ? ' + sleeve' : '') + ' model, d<sub>h</sub> = ' + N(r.dh, 1) + ')', 'VDI 2230 eq. 5.1/' + (res.pr.model === 'cone' ? '40' : '44'), '<b>' + sci(res.deltaP) + ' mm/N</b>'],
