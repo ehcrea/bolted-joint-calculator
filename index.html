@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bolted Joint Calculator: preload, tightening torque and VDI 2230 checks</title>
+  <meta name="description" content="Free online bolted joint calculator following VDI 2230: preload, tightening torque, joint diagram, deformation cone, embedding, fatigue, surface pressure and thread stripping for nuts, tapped holes, Heli-Coil and threaded inserts.">
+  <link rel="canonical" href="https://ehcrea.github.io/bolted-joint-calculator/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ehcrea">
+  <meta property="og:title" content="Bolted Joint Calculator: preload, tightening torque and VDI 2230 checks">
+  <meta property="og:description" content="Preload, tightening torque, joint diagram, deformation cone, fatigue, surface pressure and thread stripping for bolted joints. Free, in the browser.">
+  <meta property="og:url" content="https://ehcrea.github.io/bolted-joint-calculator/">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="css/style.css?v=8">
+  <script>
+    try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo" src="icons/favicon.svg" alt="" width="30" height="30">
+      <div>
+        <h1>Bolted Joint Calculator</h1>
+        <p class="subtitle">Preload, torque &amp; strength · VDI 2230 method · draft v0.1</p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <label class="preset">
+        <span class="sr-only">Application example</span>
+        <select id="preset" aria-label="Application example">
+          <option value="">Load application example…</option>
+        </select>
+      </label>
+      <button type="button" class="btn" id="share" title="Copy a link containing this design">Copy link</button>
+      <button type="button" class="btn" id="print" title="Print this page">Print</button>
+      <button type="button" class="btn" id="help-open" title="How to use this calculator">Help</button>
+      <button type="button" class="btn" id="about-open" title="About this calculator">About</button>
+      <button type="button" class="btn btn-icon" id="theme" title="Toggle light/dark theme" aria-label="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ================= INPUTS ================= -->
+    <form class="inputs" id="form" autocomplete="off" novalidate>
+      <fieldset>
+        <legend><span class="step">1</span>Joint type</legend>
+        <div class="layout-picker four" role="radiogroup" aria-label="Joint type" id="joint-picker">
+          <button type="button" role="radio" data-joint="nut" aria-checked="true">
+            <svg viewBox="0 0 60 40" aria-hidden="true"><path class="metal" d="M4 12H56M4 20H56M4 28H56"/><path d="M22 4H38V12M22 4V12M27 12V36M33 12V36M21 28H39V35H21Z"/></svg>
+            <span>Bolt + nut</span>
+          </button>
+          <button type="button" role="radio" data-joint="tapped" aria-checked="false">
+            <svg viewBox="0 0 60 40" aria-hidden="true"><path class="metal" d="M4 12H56M4 20H56"/><path d="M22 4H38V12M22 4V12M27 12V32M33 12V32"/><path class="metal" d="M4 38H56"/><path class="ring-path" d="M25 22H35V32H25Z"/></svg>
+            <span>Tapped hole</span>
+          </button>
+          <button type="button" role="radio" data-joint="helicoil" aria-checked="false">
+            <svg viewBox="0 0 60 40" aria-hidden="true"><path class="metal" d="M4 12H56M4 20H56"/><path d="M22 4H38V12M22 4V12M27 12V32M33 12V32"/><path class="metal" d="M4 38H56"/><path d="M23 23L27 25L23 27L27 29L23 31M37 23L33 25L37 27L33 29L37 31"/></svg>
+            <span>Heli-Coil</span>
+          </button>
+          <button type="button" role="radio" data-joint="insert" aria-checked="false">
+            <svg viewBox="0 0 60 40" aria-hidden="true"><path class="metal" d="M4 12H56M4 20H56"/><path d="M22 4H38V12M22 4V12M27 12V32M33 12V32"/><path class="metal" d="M4 38H56"/><path d="M22 21H26V33H22ZM34 21H38V33H34Z"/></svg>
+            <span>Thread insert</span>
+          </button>
+        </div>
+        <p class="hint" id="joint-hint"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">2</span>Bolt</legend>
+        <div class="grid2">
+          <label>Thread
+            <select data-key="thread" id="thread"></select>
+          </label>
+          <label>Property class
+            <select data-key="cls" id="cls"></select>
+          </label>
+        </div>
+        <div class="grid2">
+          <div>
+            <div class="mini-label">Head</div>
+            <div class="seg seg-wide" role="radiogroup" aria-label="Head type" id="head">
+              <button type="button" role="radio" data-head="hex" aria-checked="true">Hex ISO 4017</button>
+              <button type="button" role="radio" data-head="shcs" aria-checked="false">Socket ISO 4762</button>
+            </div>
+          </div>
+          <label><span class="lt">Plain shank length <span class="tip" tabindex="0" title="Length of the plain shank inside the clamp length (0 for a fully threaded bolt). A shank makes the bolt stiffer; a longer free thread makes it more elastic.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="shank"></label>
+        </div>
+        <div class="grid2">
+          <label>Washer
+            <select data-key="washer">
+              <option value="none">None</option>
+              <option value="7089">ISO 7089 (normal)</option>
+              <option value="7093">ISO 7093 (large)</option>
+            </select>
+          </label>
+          <label data-show="washer">Washer grade
+            <select data-key="washerGrade" id="washerGrade"></select>
+          </label>
+        </div>
+        <label class="check" data-show="washer-nut"><input type="checkbox" data-key="washerNut"> Washer under the nut too</label>
+        <label class="check"><input type="checkbox" data-key="rolledAfter"> Thread rolled after heat treatment <span class="tip" tabindex="0" title="Rolling the thread after heat treatment leaves compressive residual stress in the thread root and raises the fatigue limit (VDI 2230 σASG).">ⓘ</span></label>
+        <p class="hint" id="bolt-hint"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">3</span>Clamped parts</legend>
+        <div id="plates" class="plates"></div>
+        <button type="button" class="btn" id="add-plate">+ Add part</button>
+        <div class="grid2">
+          <label>Clearance hole (ISO 273)
+            <select data-key="holeFit">
+              <option value="fine">Fine</option>
+              <option value="medium">Medium</option>
+              <option value="coarse">Coarse</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label data-show="dh-custom">Hole Ø d<sub>h</sub> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="dhCustom"></label>
+          <label><span class="lt">Outer Ø D<sub>A</sub> <span class="tip" tabindex="0" title="Width of material around the bolt that can carry the clamp load: flange width, distance between bolts or to the edge. 0 = large (the full deformation cone fits).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="DA"></label>
+          <label><span class="lt">Surface roughness <span class="tip" tabindex="0" title="Sets the embedding (settling) of the surfaces per VDI 2230 table 5: rougher surfaces flatten more and lose more preload.">ⓘ</span></span>
+            <select data-key="rough" id="rough"></select>
+          </label>
+        </div>
+        <div data-show="esv" class="sub-block">
+          <div class="mini-label strong" id="engage-title">Tapped part</div>
+          <div class="grid2">
+            <label>Material
+              <select data-key="tapMat" id="tapMat"></select>
+            </label>
+            <label data-show="engage-input"><span class="lt" id="engage-label">Engagement length <span class="tip" tabindex="0" title="Length of the engaged thread, from the bearing face of the tapped part to the bolt end.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="engage"></label>
+            <label data-show="helicoil">Coil length
+              <select data-key="hcLen" id="hcLen"></select>
+            </label>
+          </div>
+          <div class="grid2" data-show="insert">
+            <label>Insert outer Ø <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="insD"></label>
+            <label>Outer pitch <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="insP"></label>
+          </div>
+        </div>
+        <p class="hint" id="parts-hint"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">4</span>Friction &amp; tightening</legend>
+        <label><span class="lt">Surface &amp; lubrication <span class="tip" tabindex="0" title="Sets the scatter range of the thread friction μG and the head friction μK (VDI 2230 table A5 and ISO 16047 coating specifications).">ⓘ</span></span>
+          <select data-key="friction" id="friction"></select>
+        </label>
+        <div class="grid4">
+          <label>μ<sub>G</sub> min<input type="number" step="0.01" min="0" data-key="muGmin"></label>
+          <label>μ<sub>G</sub> max<input type="number" step="0.01" min="0" data-key="muGmax"></label>
+          <label>μ<sub>K</sub> min<input type="number" step="0.01" min="0" data-key="muKmin"></label>
+          <label>μ<sub>K</sub> max<input type="number" step="0.01" min="0" data-key="muKmax"></label>
+        </div>
+        <div class="grid2">
+          <label>Tightening method
+            <select data-key="method" id="method"></select>
+          </label>
+          <label><span class="lt">α<sub>A</sub> override <span class="tip" tabindex="0" title="Tightening factor αA = FM,max / FM,min. Leave empty to use the value of the method (VDI 2230 table A8).">ⓘ</span></span><input type="number" step="0.05" min="1" data-key="aA" placeholder="auto"></label>
+        </div>
+        <div class="mini-label">Tighten to</div>
+        <div class="seg seg-wide" role="radiogroup" aria-label="Tightening target" id="mode">
+          <button type="button" role="radio" data-mode="nu" aria-checked="true">Yield utilisation ν</button>
+          <button type="button" role="radio" data-mode="torque" aria-checked="false">Given torque</button>
+        </div>
+        <div class="grid2">
+          <label data-show="mode-nu"><span class="lt">Utilisation ν <span class="tip" tabindex="0" title="Share of the yield point used by the equivalent stress (tension + torsion) during tightening. VDI 2230 uses 0.9.">ⓘ</span></span><input type="number" step="0.05" min="0.1" max="1" data-key="nu"></label>
+          <label data-show="mode-torque">Tightening torque M<sub>A</sub> <span class="u">(N·m)</span><input type="number" step="any" min="0" data-key="MA"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">5</span>Loads per bolt</legend>
+        <div class="grid2">
+          <label><span class="lt">Axial load F<sub>A,max</sub> <span class="tip" tabindex="0" title="Maximum working load along the bolt axis, per bolt, pulling the joint apart.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FAmax"></label>
+          <label><span class="lt">F<sub>A,min</sub> <span class="tip" tabindex="0" title="Minimum axial load of a cycle. Equal to FA,max for a static load; 0 for a pulsating load.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FAmin"></label>
+          <label><span class="lt">Transverse load F<sub>Q</sub> <span class="tip" tabindex="0" title="Shear load across the joint per bolt, carried by friction between the clamped parts.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FQ"></label>
+          <label><span class="lt">Interface friction μ<sub>T</sub> <span class="tip" tabindex="0" title="Static friction between the clamped parts (VDI 2230 table A6). Use the lower value of the range.">ⓘ</span></span><input type="number" step="0.01" min="0" data-key="muT" list="muT-list"></label>
+          <label><span class="lt">Friction interfaces q<sub>F</sub> <span class="tip" tabindex="0" title="Number of interfaces that transmit the transverse load (1 for two plates, 2 for a double-shear splice).">ⓘ</span></span><input type="number" step="1" min="1" data-key="qF"></label>
+          <label><span class="lt">Slip safety S<sub>G</sub> req. <span class="tip" tabindex="0" title="VDI 2230: 1.2 for static, 1.8 for alternating transverse loads.">ⓘ</span></span><input type="number" step="0.1" min="1" data-key="SGreq"></label>
+          <label><span class="lt">Extra clamp load F<sub>K,min</sub> <span class="tip" tabindex="0" title="Minimum clamp load needed for other reasons, e.g. to seal a gasket or to keep a contact closed.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FKmin"></label>
+          <label><span class="lt">Temperature change ΔT <span class="tip" tabindex="0" title="Operating temperature minus assembly temperature. With different expansion coefficients of bolt and parts the preload changes.">ⓘ</span></span> <span class="u">(K)</span><input type="number" step="any" data-key="dT"></label>
+          <label><span class="lt">Load introduction n <span class="tip" tabindex="0" title="Where the axial load enters the clamped parts: 1 = under the head and nut (stiff bolt load), 0.5 = middle of the parts (typical), smaller = near the interface. Reduces the share of the load the bolt sees.">ⓘ</span></span><input type="number" step="0.05" min="0" max="1" data-key="n"></label>
+        </div>
+        <datalist id="muT-list"></datalist>
+      </fieldset>
+    </form>
+
+    <!-- ================= RESULTS ================= -->
+    <section class="results" aria-live="polite">
+      <div class="card hero" id="hero">
+        <div class="hero-main">
+          <div class="hero-label">Tightening torque M<sub>A</sub></div>
+          <div class="hero-value" id="hero-value">—</div>
+          <div class="hero-sub" id="hero-sub"></div>
+        </div>
+        <dl class="hero-side" id="hero-side"></dl>
+        <div class="status-chip" id="status-chip"></div>
+      </div>
+
+      <div class="card issues" id="issues" hidden></div>
+
+      <div class="grid-cards">
+        <div class="card">
+          <div class="card-head"><h2>Joint cross-section</h2><span class="legend-row"><span class="legend-key"><i class="k-cone"></i>deformation cone</span><span class="legend-key"><i class="k-eng"></i>engaged thread</span></span></div>
+          <p class="card-note">Deformation cone of the clamped parts (VDI 2230 substitute body) and the bolt zones used for the resilience δ<sub>S</sub>.</p>
+          <div class="drawing" id="section"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Joint diagram</h2><span class="legend-row"><span class="legend-key"><i class="k-bolt"></i>bolt</span><span class="legend-key"><i class="k-plate"></i>clamped parts</span><span class="legend-key"><i class="k-max"></i>at F<sub>M,max</sub></span></span></div>
+          <p class="card-note">Force against elongation at the minimum preload after embedding, with the axial load F<sub>A</sub> split into the extra bolt load F<sub>SA</sub> and the relief of the parts F<sub>PA</sub>.</p>
+          <div class="drawing" id="diagram"></div>
+          <div class="metrics" id="diag-metrics"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Design checks</h2><span class="badge">VDI 2230-1 steps</span></div>
+        <div class="table-wrap"><table class="data" id="checks"></table></div>
+      </div>
+
+      <div class="grid-cards">
+        <div class="card">
+          <h2>Thread &amp; stress area</h2>
+          <div class="drawing" id="thread-detail"></div>
+          <div class="metrics" id="thread-metrics"></div>
+        </div>
+        <div class="card">
+          <h2>Preload scatter from friction</h2>
+          <p class="card-note">Preload at the tightening torque across the friction range (shaded). The red line is where the bolt reaches its yield point during tightening.</p>
+          <div class="drawing" id="friction-chart"></div>
+          <div class="section-title">How the tightening torque is used (at μ<sub>min</sub>)</div>
+          <div id="torque-bar"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Thread engagement &amp; stripping</h2><span class="badge" id="strip-badge"></span></div>
+        <div class="table-wrap"><table class="data" id="strip"></table></div>
+        <p class="hint" id="strip-hint"></p>
+      </div>
+
+      <details class="card notes steps" id="steps-card" open>
+        <summary>Calculation steps and formulas</summary>
+        <div class="steps-body" id="steps"></div>
+      </details>
+
+      <details class="card lib">
+        <summary>Libraries: threads, property classes, materials, friction, tightening</summary>
+        <div class="lib-body" id="libs"></div>
+      </details>
+
+      <details class="card notes">
+        <summary>Method, assumptions and references</summary>
+        <div class="notes-body">
+          <ul>
+            <li>The calculation follows <b>VDI 2230 Part 1 (2015)</b> for a single bolt with a <b>concentric</b> load (no bending, no prying). Eccentric loading, multi-bolt flanges and bending of the bolt (VDI 2230 Part 2) are not covered in this draft.</li>
+            <li><b>Bolt resilience</b> δ<sub>S</sub> is the sum of the head, shank, free thread, engaged thread and nut / tapped thread zones (l<sub>SK</sub> = 0.5d hex, 0.4d socket head; l<sub>G</sub> = 0.5d; l<sub>M</sub> = 0.4d nut, 0.33d tapped thread).</li>
+            <li><b>Plate resilience</b> δ<sub>P</sub> uses the deformation cone / sleeve substitute body with the cone angle φ from VDI 2230 eq. (5.1/42, 5.1/43). Parts of different materials are combined with a length-weighted series modulus.</li>
+            <li><b>Embedding</b> f<sub>Z</sub> from VDI 2230 table 5 per thread, per head/nut bearing and per inner interface; transverse loads use the shear column. Inserts add one thread interface.</li>
+            <li><b>Thread stripping</b> uses the shear areas of the ISO basic profile (FED-STD-H28 / ISO 898 form) with τ<sub>B</sub> = f<sub>τ</sub>·R<sub>m</sub>, the nut dilation factor C<sub>1</sub> (VDI 2230) and a combined thread bending and tolerance factor 0.9. Heli-Coil: STI tapped hole major Ø ≈ d + 1.3P. Solid inserts: outer thread entered by the user; the steel insert body is assumed with R<sub>m</sub> = 800 MPa.</li>
+            <li><b>Fatigue</b>: endurance limit of the thread σ<sub>ASV</sub> = 0.85(150/d + 45) (rolled before heat treatment) or σ<sub>ASG</sub> = (2 − F<sub>Sm</sub>/F<sub>0.2</sub>)·σ<sub>ASV</sub> (rolled after), for N ≥ 2·10⁶ cycles.</li>
+            <li>Limiting surface pressures p<sub>G</sub> are from VDI 2230 table A9 where available; values marked ~ in the material library are typical estimates. Always check with the supplier's data for your exact material and condition.</li>
+          </ul>
+          <p>References: VDI 2230 Blatt 1:2015 <i>Systematic calculation of highly stressed bolted joints</i>; ISO 898-1, ISO 3506-1, ISO 261, ISO 724, ISO 273, ISO 4017, ISO 4032, ISO 4762, ISO 7089/7093, ISO 16047 (torque/clamp force testing), DIN 8140 (wire thread inserts); FED-STD-H28/2B (thread shear areas); Bickford, <i>Introduction to the Design and Behavior of Bolted Joints</i>.</p>
+          <p class="hint">This is a draft tool. Results are design guidance and do not replace testing or a full VDI 2230 analysis for safety-critical joints.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>© 2026 E. Tozlu</span>
+    <a href="https://ehcrea.com" target="_blank" rel="noopener">ehcrea.com</a>
+    <a href="https://tools.ehcrea.com" target="_blank" rel="noopener">More engineering tools</a>
+    <a href="https://github.com/ehcrea/bolted-joint-calculator/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    <a href="#about" id="about-link">About</a>
+  </footer>
+
+  <dialog class="about" id="about" aria-labelledby="about-title">
+    <form method="dialog"><button class="btn btn-icon about-close" title="Close" aria-label="Close">✕</button></form>
+    <div class="about-head"><img src="icons/favicon.svg" alt=""><div><h2 id="about-title">Bolted Joint Calculator</h2><p>Draft version 0.1 · by E. Tozlu</p></div></div>
+    <p>A free, browser-based tool for engineers, makers, designers and students to size and check bolted joints: preload, tightening torque, the joint diagram, the deformation cone of the clamped parts, embedding, temperature effects, fatigue, surface pressure under the head and thread stripping in nuts, tapped holes, Heli-Coil wire inserts and solid threaded inserts. All calculations run in your browser and every formula is shown with your numbers.</p>
+    <p>The method follows the public literature on bolted joints, mainly VDI 2230 Part 1, with friction data from VDI 2230 and ISO 16047 coating specifications. Not affiliated with or endorsed by VDI or any fastener manufacturer. Heli-Coil is a trademark of its owner and is used only to name the insert type.</p>
+    <p>Made by E. Tozlu. More engineering tools at <a href="https://tools.ehcrea.com" target="_blank" rel="noopener">tools.ehcrea.com</a> and <a href="https://ehcrea.com" target="_blank" rel="noopener">ehcrea.com</a>.</p>
+    <p>Open source under the <a href="https://github.com/ehcrea/bolted-joint-calculator/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>; the source code is on <a href="https://github.com/ehcrea/bolted-joint-calculator" target="_blank" rel="noopener">GitHub</a>.</p>
+    <div class="about-support"><p><strong>Finding it useful?</strong> The tool is free for everyone and I build it in my spare time. You can support its development on Patreon.</p><a class="btn-support" href="https://www.patreon.com/ehcrea" target="_blank" rel="noopener"><span aria-hidden="true">♥</span> Support me on Patreon</a></div>
+    <p class="about-meta">Results are design guidance. Confirm critical joints by testing and with a full VDI 2230 analysis.</p>
+  </dialog>
+
+  <dialog class="about help" id="help" aria-labelledby="help-title">
+    <form method="dialog"><button class="btn btn-icon about-close" title="Close" aria-label="Close">✕</button></form>
+    <h2 id="help-title">How to use the Bolted Joint Calculator</h2>
+    <p>New here? Pick an example from <b>Load application example…</b> in the toolbar, then change one value at a time and watch the results.</p>
+    <h3>Five steps</h3>
+    <ol>
+      <li><b>Joint type</b>: a through bolt with a nut, a bolt in a tapped hole, a bolt in a Heli-Coil (wire thread insert) or in a solid threaded insert.</li>
+      <li><b>Bolt</b>: thread size, property class, head type, plain shank and washers.</li>
+      <li><b>Clamped parts</b>: the stack of parts between head and nut (or tapped part), with material and thickness; the hole and the width of material around the bolt; for tapped joints the material and the thread engagement length.</li>
+      <li><b>Friction &amp; tightening</b>: the surface and lubrication sets the friction range; the tightening method sets the preload scatter α<sub>A</sub>. Tighten to 90 % of the yield point (VDI default) or enter a torque.</li>
+      <li><b>Loads</b> per bolt: axial (static or cyclic), transverse, extra clamp load, temperature change.</li>
+    </ol>
+    <h3>Key terms</h3>
+    <dl>
+      <dt>Preload F<sub>M</sub></dt><dd>Tension in the bolt after tightening. It scatters between F<sub>M,min</sub> and F<sub>M,max</sub> = α<sub>A</sub>·F<sub>M,min</sub> because of friction and the tightening tool.</dd>
+      <dt>Stress area A<sub>S</sub></dt><dd>Cross-section used for the bolt stress, with the mean of the pitch and minor diameters.</dd>
+      <dt>Load factor Φ</dt><dd>Share of the axial load that adds to the bolt force. The rest only reduces the clamp load. A stiff joint and an elastic bolt give a small Φ.</dd>
+      <dt>Deformation cone</dt><dd>The zone of the clamped parts that carries the clamp load, spreading from the head at the angle φ.</dd>
+      <dt>Embedding F<sub>Z</sub></dt><dd>Preload lost when the surface roughness peaks flatten after assembly.</dd>
+      <dt>Residual clamp load F<sub>KR</sub></dt><dd>Clamp force left in the interface under the maximum load: it must stay above what is needed for friction grip or sealing.</dd>
+      <dt>Thread stripping</dt><dd>The thread flanks shear off. Good design makes the bolt break first: a longer engagement or an insert in soft materials.</dd>
+    </dl>
+    <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script src="js/data.js?v=8"></script>
+  <script src="js/calc.js?v=8"></script>
+  <script src="js/presets.js?v=8"></script>
+  <script src="js/drawing.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+</body>
+</html>

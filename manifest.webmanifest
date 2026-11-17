@@ -1,0 +1,13 @@
+{
+  "name": "Bolted Joint Calculator",
+  "short_name": "Bolt Calc",
+  "description": "Preload, tightening torque and VDI 2230 checks for bolted joints.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f4f2",
+  "theme_color": "#2a78d6",
+  "icons": [
+    { "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
