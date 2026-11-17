@@ -3,7 +3,7 @@
   'use strict';
   const DEFAULT = {
     joint: 'nut', thread: 'M10', cls: '10.9', head: 'hex', shank: 0,
-    washer: '7089', washerGrade: '300HV', washerNut: true, rolledAfter: false,
+    washer: '7089', washerGrade: '300HV', washerNut: true, lock: 'none', rolledAfter: false,
     plates: [{ mat: 'S235', t: 12 }, { mat: 'S235', t: 12 }],
     holeFit: 'medium', dhCustom: 11, DA: 0, rough: 'medium',
     tapMat: '6082T6', engage: 15, hcLen: 1.5, insD: 14, insP: 1.5,

@@ -104,6 +104,10 @@
     'ss-paste':    { label: 'Stainless A2/A4 with anti-seize paste',          muG: [0.10, 0.16], muK: [0.08, 0.16], cls: 'A–B' },
     'al-oil':      { label: 'Steel bolt, aluminium parts, lightly oiled',     muG: [0.12, 0.18], muK: [0.10, 0.20], cls: 'B' },
     'ti-paste':    { label: 'Titanium bolt with anti-seize paste',            muG: [0.12, 0.20], muK: [0.10, 0.18], cls: 'B', est: true },
+    // Anaerobic thread-lockers applied wet act as a lubricant during tightening; the range depends on the product
+    // and the surface. Typical spread of supplier torque-tension data (ISO 16047 tests); check your product.
+    'locker-steel':{ label: 'Steel, thread-locker applied wet (anaerobic, medium strength)', muG: [0.12, 0.20], muK: [0.10, 0.18], cls: 'B', est: true, locker: true },
+    'locker-ss':   { label: 'Stainless A2/A4, thread-locker applied wet (with activator)',  muG: [0.14, 0.26], muK: [0.12, 0.25], cls: 'C', est: true, locker: true },
     'custom':      { label: 'Custom values', custom: true },
   };
 
@@ -138,6 +142,38 @@
     ['Anodised aluminium', 0.10],
   ];
 
+  // Locking elements under the head. Dimensions are typical catalogue values (estimates): check the supplier's data.
+  //   split:   DIN 127 B spring lock washer [thickness s, outer d2]          (standard withdrawn 2003)
+  //   conical: DIN 6796 conical spring washer [outer d2, free height h, thickness s, force to flatten F_flat in N]
+  //   wedge:   wedge-locking washer pair (cam faces, DIN 25201 tested) [pair thickness, outer d2]
+  const LOCKING = {
+    none:    { label: 'None' },
+    split:   { label: 'Split lock washer (DIN 127, withdrawn)', short: 'Split lock washer', extraInterfaces: 1 },
+    conical: { label: 'Conical spring washer (DIN 6796)',      short: 'Conical spring washer', extraInterfaces: 0 },
+    wedge:   { label: 'Wedge-locking washer pair',              short: 'Wedge-lock pair', extraInterfaces: 1 },
+    locker:  { label: 'Thread-locking adhesive (anaerobic)',    short: 'Thread-locker' },
+  };
+  const LOCK_SIZES = {
+    2:   { split: [0.5, 4.4],  conical: [5, 0.6, 0.4, 628] },
+    2.5: { split: [0.6, 5.1],  conical: [6, 0.72, 0.5, 946] },
+    3:   { split: [0.8, 6.2],  conical: [7, 0.85, 0.6, 1320],    wedge: [1.8, 7.0] },
+    4:   { split: [0.9, 7.6],  conical: [9, 1.3, 1.0, 3410],     wedge: [1.8, 7.6] },
+    5:   { split: [1.2, 9.2],  conical: [11, 1.55, 1.2, 5310],   wedge: [1.8, 9.0] },
+    6:   { split: [1.6, 11.8], conical: [14, 2.0, 1.5, 7440],    wedge: [1.8, 10.8] },
+    8:   { split: [2.0, 14.8], conical: [18, 2.6, 2.0, 16100],   wedge: [2.5, 13.5] },
+    10:  { split: [2.2, 18.1], conical: [23, 3.2, 2.5, 25600],   wedge: [2.5, 16.6] },
+    12:  { split: [2.5, 21.1], conical: [29, 3.95, 3.0, 35000],  wedge: [3.4, 19.5] },
+    14:  { split: [3.0, 24.1], conical: [35, 4.65, 3.5, 47700],  wedge: [3.4, 23.0] },
+    16:  { split: [3.5, 27.4], conical: [39, 5.25, 4.0, 65000],  wedge: [3.4, 25.4] },
+    18:  { split: [3.5, 29.4], conical: [42, 5.8, 4.5, 79000],   wedge: [3.4, 27.4] },
+    20:  { split: [4.0, 33.6], conical: [45, 6.4, 5.0, 101000],  wedge: [4.6, 30.7] },
+    22:  { split: [4.0, 35.9], conical: [49, 7.05, 5.5, 128000], wedge: [4.6, 34.5] },
+    24:  { split: [5.0, 40.0], conical: [56, 7.75, 6.0, 156000], wedge: [4.6, 39.0] },
+    27:  { split: [5.0, 43.0], conical: [60, 8.35, 6.5, 165000], wedge: [5.6, 42.0] },
+    30:  { split: [6.0, 48.2], conical: [70, 9.2, 7.0, 177000],  wedge: [6.6, 47.0] },
+    36:  { split: [7.0, 58.2], conical: [82, 11.0, 8.5, 260000], wedge: [6.6, 58.0] },
+  };
+
   // Helical coil insert (DIN 8140 / ISO 8140 style): standard nominal lengths as multiples of d.
   const HELICOIL_LENGTHS = [1, 1.5, 2, 2.5, 3];
 
@@ -150,7 +186,7 @@
 
   const DATA = {
     THREADS_COARSE, THREADS_FINE, SIZES, BOLT_CLASSES, MATERIALS, WASHER_GRADES, FRICTION,
-    TIGHTENING, EMBEDDING, INTERFACE_FRICTION, HELICOIL_LENGTHS, threadList,
+    TIGHTENING, EMBEDDING, INTERFACE_FRICTION, HELICOIL_LENGTHS, LOCKING, LOCK_SIZES, threadList,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = DATA;
   else root.BJ_DATA = DATA;

@@ -133,6 +133,28 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(mid.lKd >= 1 && mid.lKd < 3 && mid.issues.some(i => i.level === 'info' && /l<sub>K<\/sub>\/d = /.test(i.text)), '1 <= lK/d < 3 gives a note: ' + mid.lKd);
 }
 
+// ---- locking elements ----
+{
+  const base = P.PRESETS.find(p => p.id === 'def-m3-bracket').s;
+  const run = lock => C.calculate(stateFrom(Object.assign({}, base, { lock })));
+  const none = run('none'), split = run('split'), conical = run('conical'), wedge = run('wedge');
+  ok(split.FZ > none.FZ && split.issues.some(i => i.level === 'warn' && /DIN 127/.test(i.text)), 'split lock washer adds embedding and warns');
+  ok(wedge.FZ > none.FZ && wedge.issues.some(i => /DIN 25201/.test(i.text)), 'wedge-lock pair adds a contact face and a note');
+  ok(conical.FZ < 0.5 * none.FZ, 'conical spring washer compensates settling: ' + conical.FZ + ' vs ' + none.FZ);
+  ok(split.lK > none.lK && conical.layers[0].label.startsWith('Conical'), 'lock washer is a layer under the head');
+  ok(none.MA === split.MA || Math.abs(none.MA - split.MA) / none.MA < 0.05, 'lock washer barely changes the torque');
+  // spring washer that is never flat: compliance in the bolt, lower load factor
+  const soft = C.calculate(stateFrom(Object.assign({}, base, { lock: 'conical', mode: 'torque', MA: 0.3 })));
+  ok(soft.res.springAlways && soft.res.deltaS > soft.res.deltaS0, 'unflattened spring washer adds bolt resilience');
+  // thread-locker: friction entry changes the torque; note shown
+  const lk = C.calculate(stateFrom(Object.assign({}, base, { lock: 'locker', friction: 'locker-ss' })));
+  ok(lk.MA > none.MA && lk.issues.some(i => /activator/.test(i.text)), 'thread-locker friction raises the torque, note shown');
+  const lkNoFr = C.calculate(stateFrom(Object.assign({}, base, { lock: 'locker' })));
+  ok(lkNoFr.issues.some(i => /pick a thread-locker friction/.test(i.text)), 'thread-locker without its friction entry gives a hint');
+  const m2 = C.calculate(stateFrom({ thread: 'M2', joint: 'tapped', engage: 4, plates: [{ mat: 'S235', t: 3 }], lock: 'wedge' }));
+  ok(m2.valid && m2.issues.some(i => /no size for M2/.test(i.text)), 'missing lock washer size is reported, not fatal');
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

@@ -114,6 +114,21 @@
     const washer = inp.washer && inp.washer !== 'none' ? (inp.washer === '7093' ? sz.w7093 : sz.w7089) : null;
     const wg = D.WASHER_GRADES[inp.washerGrade] || D.WASHER_GRADES['200HV'];
     const layers = [];
+    // ---- locking element under the head (on top of the flat washer, if any) ----
+    const lockKey = D.LOCKING[inp.lock] ? inp.lock : 'none';
+    const lockDef = D.LOCKING[lockKey];
+    let lock = null;
+    if (lockKey === 'split' || lockKey === 'conical' || lockKey === 'wedge') {
+      const ls_ = (D.LOCK_SIZES[d] || {})[lockKey];
+      if (!ls_) add('warn', lockDef.short + ': no size for M' + fmtN(d) + ' in the library, so it is left out of the calculation.');
+      else {
+        const lm = bc.stainless ? { E: 193000, alpha: 16e-6 } : { E: 206000, alpha: 11.5e-6 };
+        const conical = lockKey === 'conical';
+        lock = { key: lockKey, def: lockDef, t: conical ? ls_[2] : ls_[0], D: conical ? ls_[0] : ls_[1], d1: sz.w7089[0], E: lm.E, alpha: lm.alpha };
+        if (conical) { lock.h = ls_[1]; lock.travel = ls_[1] - ls_[2]; lock.Fflat = ls_[3]; lock.c = lock.Fflat / lock.travel; }
+        layers.push({ kind: 'washer', lock: true, t: lock.t, E: lock.E, alpha: lock.alpha, label: lockDef.short, D: lock.D, d1: lock.d1 });
+      }
+    }
     if (washer) layers.push({ kind: 'washer', t: washer[2], E: wg.E, alpha: wg.alpha, label: 'Washer ISO ' + inp.washer, D: washer[1], d1: washer[0] });
     (inp.plates || []).forEach((p, i) => {
       const m = D.MATERIALS[p.mat] || D.MATERIALS.S235;
@@ -130,63 +145,8 @@
     const alphaP = layers.reduce((s, l) => s + l.alpha * l.t, 0) / lK;
 
     // ---- R1: tightening factor (input) ----
-    // ---- R3: bolt resilience ----
-    const lSK = (inp.head === 'shcs' ? 0.4 : 0.5) * d;
-    const ls = Math.min(Math.max(0, +inp.shank || 0), lK);
-    const lGew = lK - ls;
-    const lG = 0.5 * d;
-    let EM, lM;
-    if (!esv) { EM = ES; lM = 0.4 * d; }
-    else if (inp.joint === 'insert') { EM = 205000; lM = 0.33 * d; }
-    else { EM = (D.MATERIALS[inp.tapMat] || D.MATERIALS.S235).E; lM = 0.33 * d; }
-    const dSK = lSK / (ES * g.AN);
-    const dShank = ls / (ES * g.AN);
-    const dGew = lGew / (ES * g.Ad3);
-    const dG = lG / (ES * g.Ad3);
-    const dM = lM / (EM * g.AN);
-    const deltaS = dSK + dShank + dGew + dG + dM;
-
-    // ---- plate resilience ----
-    const DA = +inp.DA > 0 ? +inp.DA : 0;
-    if (DA > 0 && DA <= dh) add('error', 'The outer diameter of the clamped parts D<sub>A</sub> must be larger than the hole.');
-    const pr = plateResilience(dW, dh, lK, DA > dh ? DA : 0, EP, esv);
-    const deltaP = pr.delta;
-
-    // ---- R3: load factor ----
-    const n = Math.min(1, Math.max(0, inp.n ?? 0.5));
-    const PhiK = deltaP / (deltaS + deltaP);
-    const Phi = n * PhiK;
-
-    // ---- R4: preload changes: embedding and temperature ----
-    const shear = (+inp.FQ || 0) > 0;
-    const emb = D.EMBEDDING[inp.rough] || D.EMBEDDING.medium;
-    const ev = shear ? emb.shear : emb.axial;
-    const nThread = 1 + (inp.joint === 'helicoil' || inp.joint === 'insert' ? 1 : 0);
-    const nBear = esv ? 1 : 2;
-    const nInter = esv ? layers.length : layers.length - 1;
-    const fZum = nThread * ev[0] + nBear * ev[1] + nInter * ev[2];
-    const fZ = fZum / 1000;
-    const FZ = fZ / (deltaS + deltaP);
-    const dT = +inp.dT || 0;
-    const dFth = lK * (alphaP - bc.alpha) * dT / (deltaS + deltaP); // + = preload gain
-    const thLoss = Math.max(0, -dFth), thGain = Math.max(0, dFth);
-
-    // ---- R2: required clamp load ----
-    const FAmax = (+inp.FAmax || 0) * 1000;
-    const FAmin = Math.min(FAmax, (+inp.FAmin || 0) * 1000);
-    const FQ = (+inp.FQ || 0) * 1000;
-    const muT = +inp.muT || 0.15;
-    const qF = Math.max(1, Math.round(+inp.qF || 1));
-    const SGreq = +inp.SGreq || 1.2;
-    const FKQ = FQ > 0 ? FQ * SGreq / (qF * muT) : 0;
-    const FKextra = (+inp.FKmin || 0) * 1000;
-    const FKerf = Math.max(FKQ, FKextra);
-    const FPA = (1 - Phi) * FAmax;
-    const FSA = Phi * FAmax;
-    const FMerf = FKerf + FPA + FZ + thLoss;
-
-    // ---- R5 / R13: assembly preload and tightening torque ----
-    const dhb = washer ? washer[0] : dh;         // bore under the head bearing face
+    // ---- R5 / R13: assembly preload and tightening torque (independent of the resilience) ----
+    const dhb = lock ? lock.d1 : washer ? washer[0] : dh;   // bore under the head bearing face
     const DKm = (dW + dhb) / 2;
     const Kmin = torqueK(g, muGmin, muKmin, DKm);
     const Kmax = torqueK(g, muGmax, muKmax, DKm);
@@ -206,6 +166,79 @@
     const torqueParts = {
       pitch: 0.16 * g.P / Kmin, thread: 0.58 * g.d2 * muGmin / Kmin, head: muKmin * DKm / 2 / Kmin,
     };
+
+    // ---- R3: bolt resilience ----
+    const lSK = (inp.head === 'shcs' ? 0.4 : 0.5) * d;
+    const ls = Math.min(Math.max(0, +inp.shank || 0), lK);
+    const lGew = lK - ls;
+    const lG = 0.5 * d;
+    let EM, lM;
+    if (!esv) { EM = ES; lM = 0.4 * d; }
+    else if (inp.joint === 'insert') { EM = 205000; lM = 0.33 * d; }
+    else { EM = (D.MATERIALS[inp.tapMat] || D.MATERIALS.S235).E; lM = 0.33 * d; }
+    const dSK = lSK / (ES * g.AN);
+    const dShank = ls / (ES * g.AN);
+    const dGew = lGew / (ES * g.Ad3);
+    const dG = lG / (ES * g.Ad3);
+    const dM = lM / (EM * g.AN);
+    // Conical spring washer: a spring in series with the bolt (linear secant to the flat point, an estimate).
+    // If even F_M,max stays below its flat load it is a spring in every state; otherwise it is solid at assembly
+    // and only becomes a spring once settling has brought the force down to F_flat (see the embedding below).
+    const dC = lock && lock.key === 'conical' ? 1 / lock.c : 0;
+    const springAlways = !!(lock && lock.key === 'conical' && FMmax < lock.Fflat);
+    const deltaS0 = dSK + dShank + dGew + dG + dM;
+    const deltaS = deltaS0 + (springAlways ? dC : 0);
+
+    // ---- plate resilience ----
+    const DA = +inp.DA > 0 ? +inp.DA : 0;
+    if (DA > 0 && DA <= dh) add('error', 'The outer diameter of the clamped parts D<sub>A</sub> must be larger than the hole.');
+    const pr = plateResilience(dW, dh, lK, DA > dh ? DA : 0, EP, esv);
+    const deltaP = pr.delta;
+
+    // ---- R3: load factor ----
+    const n = Math.min(1, Math.max(0, inp.n ?? 0.5));
+    const PhiK = deltaP / (deltaS + deltaP);
+    const Phi = n * PhiK;
+
+    // ---- R4: preload changes: embedding and temperature ----
+    const shear = (+inp.FQ || 0) > 0;
+    const emb = D.EMBEDDING[inp.rough] || D.EMBEDDING.medium;
+    const ev = shear ? emb.shear : emb.axial;
+    const nThread = 1 + (inp.joint === 'helicoil' || inp.joint === 'insert' ? 1 : 0);
+    const nBear = esv ? 1 : 2;
+    const nLockExtra = lock ? (lock.def.extraInterfaces || 0) : 0;   // split ends / cam faces: one more face
+    const nInter = (esv ? layers.length : layers.length - 1) + nLockExtra;
+    const fZum = nThread * ev[0] + nBear * ev[1] + nInter * ev[2];
+    const fZ = fZum / 1000;
+    // Preload lost to embedding, evaluated at F_M,min (the case that matters for the residual clamp load).
+    const FZ0 = fZ / (deltaS0 + deltaP);                 // without any spring effect
+    let FZ = fZ / (deltaS + deltaP);
+    let springStage = null;
+    if (lock && lock.key === 'conical' && !springAlways) {
+      const stiff = deltaS0 + deltaP;
+      const fToFlat = Math.max(0, FMmin - lock.Fflat) * stiff;   // settling taken while the washer is still flat
+      if (fZ > fToFlat) {
+        FZ = Math.max(0, FMmin - lock.Fflat) + (fZ - fToFlat) / (stiff + dC);
+        springStage = { fToFlat };
+      } else FZ = fZ / stiff;
+    }
+    const dT = +inp.dT || 0;
+    const dFth = lK * (alphaP - bc.alpha) * dT / (deltaS + deltaP); // + = preload gain
+    const thLoss = Math.max(0, -dFth), thGain = Math.max(0, dFth);
+
+    // ---- R2: required clamp load ----
+    const FAmax = (+inp.FAmax || 0) * 1000;
+    const FAmin = Math.min(FAmax, (+inp.FAmin || 0) * 1000);
+    const FQ = (+inp.FQ || 0) * 1000;
+    const muT = +inp.muT || 0.15;
+    const qF = Math.max(1, Math.round(+inp.qF || 1));
+    const SGreq = +inp.SGreq || 1.2;
+    const FKQ = FQ > 0 ? FQ * SGreq / (qF * muT) : 0;
+    const FKextra = (+inp.FKmin || 0) * 1000;
+    const FKerf = Math.max(FKQ, FKextra);
+    const FPA = (1 - Phi) * FAmax;
+    const FSA = Phi * FAmax;
+    const FMerf = FKerf + FPA + FZ + thLoss;
 
     // ---- assembly stress (utilisation during tightening) ----
     const Wp = PI / 16 * Math.pow(g.ds, 3);
@@ -249,11 +282,17 @@
     };
     const firstPlate = plates[0];
     const lastPlate = plates[plates.length - 1];
+    if (lock) {
+      // the hardened lock washer spreads the head load a little; it bears on the flat washer or the first part
+      const De = Math.min(lock.D, dW + 2 * lock.t);
+      if (washer) pushP(lock.def.short + ' on washer', De, washer[0], wg.label, wg.pG, wg.est);
+      else pushP(lock.def.short + ' on ' + firstPlate.m.label, De, dh, firstPlate.m.label, firstPlate.m.pG, firstPlate.m.est);
+    }
     if (washer) {
-      pushP('Head on washer', dW, washer[0], wg.label, wg.pG, wg.est);
+      if (!lock) pushP('Head on washer', dW, washer[0], wg.label, wg.pG, wg.est);
       const De = Math.min(washer[1], dW + 2 * washer[2]);
       pushP('Washer on ' + firstPlate.m.label, De, dh, firstPlate.m.label, firstPlate.m.pG, firstPlate.m.est);
-    } else {
+    } else if (!lock) {
       pushP('Head on ' + firstPlate.m.label, dW, dh, firstPlate.m.label, firstPlate.m.pG, firstPlate.m.est);
     }
     if (!esv) {
@@ -377,6 +416,21 @@
     if (lKd < 1) add('warn', 'Very short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 1): the bolt stretches little, so embedding costs ' + fzShare + ' % of the minimum preload. Use a longer bolt with a spacer sleeve or a stiff washer stack to reach l<sub>K</sub>/d ≥ 3.');
     else if (lKd < 3) add('info', 'Short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 3): embedding costs ' + fzShare + ' % of the minimum preload. A longer bolt with a spacer sleeve (l<sub>K</sub>/d ≥ 3) makes the preload less sensitive to settling and vibration.');
     if (lK / d > 10) add('warn', 'Very long clamp length (l<sub>K</sub>/d > 10): the cone model and the resilience formulas lose accuracy.');
+    // ---- locking elements ----
+    const fzLockUm = lock ? (1 + nLockExtra) * ev[2] : 0;
+    if (lock && lock.key === 'split') add('warn', 'Split lock washers (DIN 127, withdrawn in 2003) do not secure a preloaded joint: they are pressed flat far below the preload and then only add contact faces that settle, here about ' + fmtN(fzLockUm, 1) + ' µm more embedding. VDI 2230 Part 1 advises against them (Junker vibration test, DIN 65151). Use enough preload, a thread-locker or a wedge-locking washer pair instead.');
+    if (lock && lock.key === 'wedge') add('info', 'Wedge-locking washers stop the screw from turning loose under transverse vibration (tested to DIN 25201 / Junker test). They do not stop settling or creep: the preload loss is calculated as for a washer pair with one more contact face (' + fmtN(fzLockUm, 1) + ' µm). Dimensions are typical catalogue values.');
+    if (lock && lock.key === 'conical') {
+      const kept = FZ0 - FZ;
+      const base = 'Conical spring washer (DIN 6796): flat at about ' + fmtN(lock.Fflat / 1000, 2) + ' kN, spring rate about ' + fmtN(lock.c / 1000, 0) + ' kN/mm (estimate, linearised). ';
+      if (springAlways) add('info', base + 'It is not pressed flat by the preload, so it acts as a spring in series with the bolt: settling costs ' + fmtN(kept / 1000, 2) + ' kN less preload and the load factor drops to Φ<sub>K</sub> = ' + fmtN(PhiK, 2) + '.');
+      else if (springStage) add('info', base + 'At F<sub>M,max</sub> it is pressed flat; once settling brings the force below the flat load it springs back and keeps ' + fmtN(kept / 1000, 2) + ' kN more preload than a plain washer.');
+      else add('info', base + 'F<sub>M,min</sub> is so far above the flat load that settling never lets it spring back: here it works like a plain hardened washer. Choose a smaller or thinner spring washer, or a disc spring stack, to compensate settling.');
+    }
+    const lockerUsed = lockKey === 'locker' || fr.locker;
+    if (lockKey === 'locker' && !fr.locker) add('info', 'Thread-locker selected: also pick a thread-locker friction entry, because the wet adhesive changes the friction during tightening and so the preload at a given torque.');
+    if (lockerUsed) add('info', 'A cured thread-locker stops the screw from turning loose and seals the thread, but adds no preload and does not stop settling or creep. Stainless steel, aluminium and plated surfaces cure slowly: use an activator (primer). Most grades weaken above about 150 °C. Friction values for thread-lockers are estimates: use the supplier\'s torque-tension data.');
+
     if (inp.method === 'yield' || inp.method === 'angle') {
       if (inp.mode !== 'torque' && nu < 0.99) add('info', 'With yield- or angle-controlled tightening the bolt is tightened to its yield point: set ν = 1.0.');
     }
@@ -391,9 +445,10 @@
       valid: true, status: worst, issues, checks,
       thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
-      res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, deltaS, deltaP, pr },
+      res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, dC, springAlways, deltaS0, deltaS, deltaP, pr },
+      lock, lockKey, lockerUsed,
       n, PhiK, Phi,
-      emb: { fZum, nThread, nBear, nInter, values: ev, shear }, fZ, FZ, dT, dFth, thLoss, thGain,
+      emb: { fZum, nThread, nBear, nInter, nLockExtra, values: ev, shear }, fZ, FZ, FZ0, springStage, dT, dFth, thLoss, thGain,
       FAmax, FAmin, FQ, muT, qF, SGreq, FKQ, FKextra, FKerf, FPA, FSA, FMerf,
       fr, muGmin, muGmax, muKmin, muKmax, meth, aA, torqueMethod, nu,
       Kmin, Kmax, FMzulNu, FMmax, FMmin, FMatMuMax, MA, torqueParts,

@@ -18,6 +18,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Surface pressure** under the head, nut and washers against the limiting pressure p<sub>G</sub> of each material
 - **Thread stripping and engagement length** for a nut, a tapped hole, a **Heli-Coil** (wire thread insert, STI hole) or a **solid threaded insert**: strength of each thread against the bolt breaking load and the engagement length needed for the bolt to break first
 - **Bolt length** from clamp length and engagement, rounded to a standard length
+- **Locking elements** under the head: split lock washer (DIN 127, flagged as ineffective), conical spring washer (DIN 6796, modelled as a spring that recovers settling once below its flat load), wedge-locking washer pair (DIN 25201), and thread-locking adhesive with its own friction ranges
 - **Clamp length ratio** l<sub>K</sub>/d with the share of preload lost to settling: a note below 3 (the common design rule, e.g. in semiconductor equipment) and a warning below 1
 
 ## Visuals
@@ -39,7 +40,8 @@ A browser-based tool for engineers, makers, designers and students to **size and
 | Threads | ISO 261 metric coarse M2 to M36 and fine threads, with ISO 4017 / 4032 hex and ISO 4762 socket head dimensions, ISO 273 clearance holes and ISO 7089 / 7093 washers |
 | Property classes | 4.6, 5.6, 5.8, 8.8, 10.9, 12.9 (ISO 898-1), A2/A4-50, -70, -80 (ISO 3506-1), titanium grade 5 |
 | Materials | Structural and quenched-and-tempered steels, stainless steels, grey and ductile cast iron, aluminium alloys (wrought and die-cast), magnesium, titanium, brass, POM, PA6-GF30 and FR-4 circuit boards (through-thickness values): E, α, R<sub>m</sub>, p<sub>G</sub>, shear strength |
-| Friction | Oiled black oxide, zinc plated, zinc flake, MoS₂, stainless dry and with paste, aluminium parts, titanium (VDI 2230 table A5, ISO 16047 coating ranges) |
+| Friction | Oiled black oxide, zinc plated, zinc flake, MoS₂, stainless dry and with paste, aluminium parts, titanium, thread-locker on steel and stainless (VDI 2230 table A5, ISO 16047 coating ranges) |
+| Locking elements | Split lock washers, conical spring washers (size, free height, flat load), wedge-locking washer pairs: typical catalogue values |
 | Tightening | Yield- and angle-controlled, ultrasonic, hydraulic tensioner, torque wrench, power tool, impact wrench (VDI 2230 table A8) |
 
 Values marked ~ are typical estimates and not from VDI 2230: check them against your supplier's data.
@@ -95,6 +97,7 @@ The tests check the stress areas against ISO 898-1, the permissible preload agai
 - VDI 2230 Blatt 1:2015, *Systematic calculation of highly stressed bolted joints: joints with one cylindrical bolt*
 - ISO 898-1, ISO 3506-1, ISO 261, ISO 724, ISO 273, ISO 4017, ISO 4032, ISO 4762, ISO 7089, ISO 7093-1, ISO 16047
 - DIN 8140 (wire thread inserts), FED-STD-H28/2B (thread shear areas)
+- DIN 127 (withdrawn), DIN 6796, DIN 25201, DIN 65151 / ISO 16130 (Junker test), ISO 10964 and ASTM D5363 / MIL-S-22473 (anaerobic thread-lockers)
 - J. H. Bickford, *Introduction to the Design and Behavior of Bolted Joints*
 
 This project is not affiliated with or endorsed by VDI or any fastener manufacturer. Heli-Coil is a trademark of its owner and is used here only to name the insert type.

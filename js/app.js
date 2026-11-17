@@ -37,7 +37,8 @@
     opt($('#rough'), Object.entries(D.EMBEDDING).map(([k, v]) => [k, v.label]));
     opt($('#tapMat'), matOptions());
     opt($('#hcLen'), D.HELICOIL_LENGTHS.map(x => [x, x + ' × d']));
-    opt($('#friction'), Object.entries(D.FRICTION).map(([k, v]) => [k, v.label]));
+    opt($('#friction'), Object.entries(D.FRICTION).map(([k, v]) => [k, v.label + (v.est ? ' ~' : '')]));
+    opt($('#lock'), Object.entries(D.LOCKING).map(([k, v]) => [k, v.label]));
     opt($('#method'), Object.entries(D.TIGHTENING).map(([k, v]) => [k, v.label + ' · α<sub>A</sub> ' + v.range]));
     $$('#method option').forEach(o => { o.textContent = o.textContent.replace(/<\/?sub>/g, ''); });
     $('#muT-list').innerHTML = D.INTERFACE_FRICTION.map(([t, v]) => `<option value="${v}">${t}</option>`).join('');
@@ -318,6 +319,7 @@
       ['δ<sub>Gew</sub> = l<sub>Gew</sub> / (E<sub>S</sub>·A<sub>d3</sub>)', N(res.lGew, 2) + ' / (' + N(r.bc.E, 0) + '·' + N(g.Ad3, 2) + ')', sci(res.dGew) + ' mm/N'],
       ['δ<sub>G</sub> = 0.5d / (E<sub>S</sub>·A<sub>d3</sub>)', N(res.lG, 2) + ' / (' + N(r.bc.E, 0) + '·' + N(g.Ad3, 2) + ')', sci(res.dG) + ' mm/N'],
       ['δ<sub>M</sub> = l<sub>M</sub> / (E<sub>M</sub>·A<sub>N</sub>)', N(res.lM, 2) + ' / (' + N(res.EM, 0) + '·' + N(g.AN, 2) + ')', sci(res.dM) + ' mm/N'],
+      res.dC > 0 ? ['δ<sub>C</sub> = (h − s) / F<sub>flat</sub> conical spring washer', '(' + N(r.lock.h, 2) + ' − ' + N(r.lock.t, 2) + ') / ' + N(r.lock.Fflat, 0), sci(res.dC) + ' mm/N' + (res.springAlways ? ' (in δ<sub>S</sub>)' : ' (only after settling to F<sub>flat</sub>)')] : null,
       ['<b>δ<sub>S</sub></b> = Σ δ<sub>i</sub>', '', '<b>' + sci(res.deltaS) + ' mm/N</b>'],
       ['l<sub>K</sub> = Σ l<sub>i</sub>; E<sub>P</sub> = l<sub>K</sub> / Σ(l<sub>i</sub>/E<sub>i</sub>)', 'l/E (mm/GPa): ' + lay, N(r.lK, 2) + ' mm; ' + N(r.EP / 1000, 1) + ' GPa'],
       ['l<sub>K</sub>/d (aim for ≥ 3)', N(r.lK, 2) + ' / ' + N(r.thread.d, 0), N(r.lKd, 2)],
@@ -330,7 +332,9 @@
     const ev = r.emb.values;
     step('R4', 'Preload changes: embedding and temperature', [
       ['f<sub>Z</sub> = n<sub>thr</sub>·f<sub>thr</sub> + n<sub>bear</sub>·f<sub>bear</sub> + n<sub>int</sub>·f<sub>int</sub>', r.emb.nThread + '·' + ev[0] + ' + ' + r.emb.nBear + '·' + ev[1] + ' + ' + r.emb.nInter + '·' + ev[2] + ' µm (' + (r.emb.shear ? 'transverse' : 'axial') + ' load)', N(r.emb.fZum, 1) + ' µm'],
-      ['F<sub>Z</sub> = f<sub>Z</sub> / (δ<sub>S</sub> + δ<sub>P</sub>)', N(r.fZ, 4) + ' / ' + sci(res.deltaS + res.deltaP), kN(r.FZ)],
+      r.springStage
+        ? ['F<sub>Z</sub> = (F<sub>M,min</sub> − F<sub>flat</sub>) + (f<sub>Z</sub> − f<sub>flat</sub>) / (δ<sub>S</sub> + δ<sub>C</sub> + δ<sub>P</sub>)', 'stiff until F<sub>flat</sub> (f<sub>flat</sub> = ' + N(r.springStage.fToFlat * 1000, 1) + ' µm), then with the spring; plain washer: ' + kN(r.FZ0), kN(r.FZ)]
+        : ['F<sub>Z</sub> = f<sub>Z</sub> / (δ<sub>S</sub> + δ<sub>P</sub>)', N(r.fZ, 4) + ' / ' + sci(res.deltaS + res.deltaP), kN(r.FZ)],
       ['ΔF<sub>Vth</sub> = l<sub>K</sub>·(α<sub>P</sub> − α<sub>S</sub>)·ΔT / (δ<sub>S</sub> + δ<sub>P</sub>)', N(r.lK, 1) + '·(' + N(r.alphaP * 1e6, 1) + ' − ' + N(r.bc.alpha * 1e6, 1) + ')·10⁻⁶·' + N(r.dT, 0), kN(r.dFth)],
     ]);
     step('R5', 'Minimum and maximum assembly preload', [

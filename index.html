@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=16">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -105,6 +105,9 @@
           </label>
         </div>
         <label class="check" data-show="washer-nut"><input type="checkbox" data-key="washerNut"> Washer under the nut too</label>
+        <label><span class="lt">Locking element <span class="tip" tabindex="0" title="Placed under the head, on top of the flat washer. Split lock washers add settling and do not secure a preloaded joint. A conical spring washer (DIN 6796) compensates settling. Wedge-locking washers and thread-lockers stop rotational loosening but not settling. Dimensions and forces are typical catalogue values.">ⓘ</span></span>
+          <select data-key="lock" id="lock"></select>
+        </label>
         <label class="check"><input type="checkbox" data-key="rolledAfter"> Thread rolled after heat treatment <span class="tip" tabindex="0" title="Rolling the thread after heat treatment leaves compressive residual stress in the thread root and raises the fatigue limit (VDI 2230 σASG).">ⓘ</span></label>
         <p class="hint" id="bolt-hint"></p>
       </fieldset>
@@ -317,6 +320,16 @@
       <dt>Thread stripping</dt><dd>The thread flanks shear off. Good design makes the bolt break first: a longer engagement or an insert in soft materials.</dd>
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
+    <h3 id="help-lock">Locking elements</h3>
+    <p>A joint comes loose in two ways: it <b>loses preload</b> (settling, creep, temperature), or the screw <b>turns loose</b> under transverse vibration (Junker test, DIN 65151 / ISO 16130). Enough preload is the first defence against both. Locking elements help with only one of them:</p>
+    <ul>
+      <li><b>Split lock washer</b> (DIN 127, withdrawn in 2003): pressed flat far below the preload, then only adds contact faces that settle. VDI 2230 Part 1 calls it ineffective in preloaded joints. The calculator adds its layer and the extra embedding, and warns.</li>
+      <li><b>Conical spring washer</b> (DIN 6796) or disc springs: a spring in series with the bolt. Once settling lowers the force below its flat load it springs back and keeps most of the preload. Calculated with a linearised spring rate from the flat load and the spring travel.</li>
+      <li><b>Wedge-locking washer pair</b> (tested to DIN 25201): stops the screw turning loose, but does not stop settling. Calculated as a washer pair with one more contact face.</li>
+      <li><b>Thread-locking adhesive</b> (anaerobic, ISO 10964; MIL-S-22473 / ASTM D5363 in defence): stops the screw turning loose and seals the thread. Applied wet, it changes the friction during tightening, so choose a thread-locker friction entry. It adds no preload and does not stop settling.</li>
+    </ul>
+    <p class="about-meta">Lock washer dimensions, flat loads and thread-locker friction are typical catalogue values (marked ~ or noted as estimates): check your supplier's data.</p>
+
     <h3 id="help-pcb">Mounting circuit boards (PCBs)</h3>
     <p>Choose <b>PCB FR-4</b> as a clamped part. A board behaves differently from a metal plate:</p>
     <ul>
@@ -344,10 +357,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=15"></script>
-  <script src="js/calc.js?v=15"></script>
-  <script src="js/presets.js?v=15"></script>
-  <script src="js/drawing.js?v=15"></script>
-  <script src="js/app.js?v=15"></script>
+  <script src="js/data.js?v=16"></script>
+  <script src="js/calc.js?v=16"></script>
+  <script src="js/presets.js?v=16"></script>
+  <script src="js/drawing.js?v=16"></script>
+  <script src="js/app.js?v=16"></script>
 </body>
 </html>
