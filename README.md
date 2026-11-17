@@ -1,5 +1,7 @@
 # Bolted Joint Calculator
 
+**Live:** https://ehcrea.github.io/bolted-joint-calculator/
+
 **Status:** draft v0.1. The calculation core and visuals work; translations, inch units and more joint types are still to come (see the roadmap).
 
 A browser-based tool for engineers, makers, designers and students to **size and check bolted joints**. Pick the joint type, the bolt, the stack of clamped parts, the friction and the tightening method, and the loads. It returns the **tightening torque** and runs the checks of the **VDI 2230 Part 1** method, showing every formula with your numbers.
