@@ -87,6 +87,13 @@
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('bolt.theme', next); } catch (e) { /* ignore */ }
     });
+    $$('[data-load-preset]').forEach(btn => btn.addEventListener('click', () => {
+      const sel = $('#preset');
+      sel.value = btn.dataset.loadPreset;
+      sel.dispatchEvent(new Event('change'));
+      btn.closest('dialog').close();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }));
     const dlg = (btn, id) => $(btn).addEventListener('click', e => { e.preventDefault(); $(id).showModal(); });
     dlg('#about-open', '#about'); dlg('#about-link', '#about'); dlg('#help-open', '#help');
     renderLibs();

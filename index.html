@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=11">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -317,13 +317,42 @@
       <dt>Thread stripping</dt><dd>The thread flanks shear off. Good design makes the bolt break first: a longer engagement or an insert in soft materials.</dd>
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
+    <h3 id="help-pcb">Mounting circuit boards (PCBs)</h3>
+    <p>Choose <b>PCB FR-4</b> as a clamped part. A board behaves differently from a metal plate:</p>
+    <ul>
+      <li><b>Soft through its thickness.</b> FR-4 has E<sub>z</sub> ≈ 10 GPa, about 1/20 of steel. The board compresses more than the screw stretches, so a large share of any pull-off load (Φ ≈ 0.6 for an M3 through 1.6 mm) reaches the screw.</li>
+      <li><b>That softness helps against settling.</b> The embedding of head, washer and thread (about 8–10 µm) costs less preload than in a thin steel plate, where it can remove nearly all the preload of a small screw. Thicker boards keep more preload.</li>
+      <li><b>The board limits the torque, not the screw.</b> At a safe board pressure an M3 screw uses less than half of its strength.</li>
+      <li><b>Creep is the main long-term loss</b>, especially above about 80 °C and near the glass transition T<sub>g</sub>. The calculator warns about it but does not compute it.</li>
+      <li><b>Temperature:</b> FR-4 expands about 60 ppm/K through its thickness (about 250 ppm/K above T<sub>g</sub>), much more than a steel screw. Heating raises the screw force and the board pressure; cooling lowers the clamp.</li>
+    </ul>
+    <p>M3 screw with washer, 1.6 mm board on a brass standoff, oiled steel screw, torque wrench:</p>
+    <div class="table-wrap"><table class="data">
+      <thead><tr><th class="left">Torque</th><th>Preload</th><th>Board pressure</th><th>Left after settling</th></tr></thead>
+      <tbody>
+        <tr><td class="left">0.3 N·m</td><td>0.41–0.63 kN</td><td>33 MPa</td><td>none: can loosen</td></tr>
+        <tr><td class="left">0.5 N·m</td><td>0.68–1.06 kN</td><td>54 MPa</td><td>0.20 kN</td></tr>
+        <tr><td class="left">0.6 N·m</td><td>0.82–1.27 kN</td><td>65 MPa</td><td>0.34 kN</td></tr>
+        <tr><td class="left">1.0 N·m</td><td>1.37–2.11 kN</td><td>107 MPa</td><td>0.89 kN, board overloaded</td></tr>
+      </tbody>
+    </table></div>
+    <p>Good practice:</p>
+    <ul>
+      <li>Clamp on a bare copper or ENIG pad (a ring free of solder mask) a little larger than the washer.</li>
+      <li>Always use a washer, or a screw with a built-in washer or flange. Without one the head presses about 115 MPa into the board at 0.6 N·m.</li>
+      <li>Use about 0.5–0.6 N·m for M3 with a controlled screwdriver. Against vibration use thread-locking compound or a locking feature rather than more torque.</li>
+      <li>Never tap threads into the board: use a nut, a standoff, or a press-fit or SMD nut.</li>
+      <li>Keep ceramic capacitors (MLCCs), BGAs and other strain-sensitive parts a few millimetres away from mounting holes.</li>
+    </ul>
+    <p class="help-actions"><button type="button" class="btn" data-load-preset="m3-pcb-standoff">Load: PCB on a standoff</button> <button type="button" class="btn" data-load-preset="m3-pcb-housing">Load: PCB in a housing</button></p>
+    <p class="about-meta">The FR-4 values (E<sub>z</sub>, expansion and the 100 MPa pressure limit) are estimates: no standard gives a limiting pressure for circuit boards. Use your laminate supplier's data where it matters.</p>
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=10"></script>
-  <script src="js/calc.js?v=10"></script>
-  <script src="js/presets.js?v=10"></script>
-  <script src="js/drawing.js?v=10"></script>
-  <script src="js/app.js?v=10"></script>
+  <script src="js/data.js?v=11"></script>
+  <script src="js/calc.js?v=11"></script>
+  <script src="js/presets.js?v=11"></script>
+  <script src="js/drawing.js?v=11"></script>
+  <script src="js/app.js?v=11"></script>
 </body>
 </html>
