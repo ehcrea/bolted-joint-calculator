@@ -216,7 +216,8 @@
     });
     // force arrows
     if (r.FAmax > 0) {
-      out.push(`<line x1="${cx + 30}" y1="${top - 2}" x2="${cx + 30}" y2="${top - 28}" class="force" marker-end="url(#${id}-arrF)"/><text x="${cx + 36}" y="${top - 16}" class="force-text">F<tspan baseline-shift="sub" font-size="9">A</tspan></text>`);
+      const fx = r1(X((head.s || head.dk) / 2) + 22);
+      out.push(`<line x1="${fx}" y1="${r1(Y(yH * 0.6))}" x2="${fx}" y2="${r1(Y(yH * 0.6) - 30)}" class="force" marker-end="url(#${id}-arrF)"/><text x="${fx + 6}" y="${r1(Y(yH * 0.6) - 14)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">A</tspan></text>`);
     }
     out.push('</svg>');
     return out.join('');
