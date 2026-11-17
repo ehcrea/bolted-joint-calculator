@@ -334,18 +334,18 @@ table.data td.wrap { white-space: normal; text-align: left; min-width: 180px; co
 /* ---------- Bolted joint additions ---------- */
 :root {
   --m-steel: #d9dde3; --m-stainless: #cfd9e3; --m-castiron: #b9bdc3; --m-aluminium: #e8ebef; --m-magnesium: #ece8df;
-  --m-titanium: #d5d2e0; --m-copper: #ead2b4; --m-polymer: #f2e3c2; --m-washer: #c4ccd6; --m-nut: #c9ced6;
+  --m-titanium: #d5d2e0; --m-copper: #ead2b4; --m-polymer: #f2e3c2; --m-pcb: #c5dfc0; --m-washer: #c4ccd6; --m-nut: #c9ced6;
   --bolt: #8f99a6; --bolt-edge: #4f5865; --cone: rgba(42,120,214,.20); --engaged: rgba(235,104,52,.55); --coil: #eb6834; --insert: #e3b55b;
 }
 :root[data-theme="dark"] {
   --m-steel: #3a3f46; --m-stainless: #37414c; --m-castiron: #2f3237; --m-aluminium: #464b52; --m-magnesium: #4a463e;
-  --m-titanium: #423f4d; --m-copper: #5a4630; --m-polymer: #574b33; --m-washer: #5a626d; --m-nut: #505761;
+  --m-titanium: #423f4d; --m-copper: #5a4630; --m-polymer: #574b33; --m-pcb: #2e4c34; --m-washer: #5a626d; --m-nut: #505761;
   --bolt: #77818e; --bolt-edge: #b3bcc8; --cone: rgba(57,135,229,.28); --engaged: rgba(217,89,38,.6); --coil: #d95926; --insert: #b48a3a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --m-steel: #3a3f46; --m-stainless: #37414c; --m-castiron: #2f3237; --m-aluminium: #464b52; --m-magnesium: #4a463e;
-    --m-titanium: #423f4d; --m-copper: #5a4630; --m-polymer: #574b33; --m-washer: #5a626d; --m-nut: #505761;
+    --m-titanium: #423f4d; --m-copper: #5a4630; --m-polymer: #574b33; --m-pcb: #2e4c34; --m-washer: #5a626d; --m-nut: #505761;
     --bolt: #77818e; --bolt-edge: #b3bcc8; --cone: rgba(57,135,229,.28); --engaged: rgba(217,89,38,.6); --coil: #d95926; --insert: #b48a3a;
   }
 }
@@ -382,7 +382,7 @@ input.derived { color: var(--text-2); background: var(--surface-2); }
 svg .layer { stroke: var(--metal-edge); stroke-width: .8; }
 svg .m-steel { fill: var(--m-steel); } svg .m-stainless { fill: var(--m-stainless); } svg .m-castiron { fill: var(--m-castiron); }
 svg .m-aluminium { fill: var(--m-aluminium); } svg .m-magnesium { fill: var(--m-magnesium); } svg .m-titanium { fill: var(--m-titanium); }
-svg .m-copper { fill: var(--m-copper); } svg .m-polymer { fill: var(--m-polymer); } svg .m-washer { fill: var(--m-washer); } svg .m-nut { fill: var(--m-nut); }
+svg .m-copper { fill: var(--m-copper); } svg .m-polymer { fill: var(--m-polymer); } svg .m-pcb { fill: var(--m-pcb); } svg .m-washer { fill: var(--m-washer); } svg .m-nut { fill: var(--m-nut); }
 svg .hatch-line { stroke: var(--metal-edge); stroke-width: .6; opacity: .7; }
 svg .hatch-fill { stroke: none; pointer-events: none; }
 svg .bolt { fill: var(--bolt); stroke: var(--bolt-edge); stroke-width: 1; }

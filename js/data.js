@@ -81,6 +81,9 @@
     'CuZn39':   { label: 'Brass CuZn39Pb3',               group: 'Copper',    E: 96000,  alpha: 20e-6,   Rm: 430,  pG: 400,  ftau: 0.6, est: true },
     'POM':      { label: 'POM-C (acetal)',                group: 'Polymer',   E: 2800,   alpha: 110e-6,  Rm: 65,   pG: 60,   ftau: 0.8, est: true, polymer: true },
     'PA6GF30':  { label: 'PA6-GF30 (conditioned)',        group: 'Polymer',   E: 6500,   alpha: 30e-6,   Rm: 110,  pG: 90,   ftau: 0.6, est: true, polymer: true },
+    // FR-4 printed circuit board, values through the thickness (z): E_z and z-CTE below Tg. No pG standard exists;
+    // 100 MPa is a conservative estimate (flatwise compressive strength ~400 MPa) to limit creep of laminate and solder mask.
+    'FR4':      { label: 'PCB FR-4 (through thickness)',  group: 'PCB',       E: 10000,  alpha: 60e-6,   Rm: 310,  pG: 100,  ftau: 0.15, est: true, pcb: true },
   };
 
   // Washer hardness classes: limiting surface pressure on the washer itself (estimate from hardness).

@@ -105,6 +105,22 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   near(r2.FMmax, r.FMmax, 1e-9, 'torque mode inverse');
 }
 
+// ---- PCB: FR-4 is soft through its thickness, so the board dominates the joint stiffness ----
+{
+  const pcb = C.calculate(stateFrom(P.PRESETS.find(p => p.id === 'm3-pcb-standoff').s));
+  ok(pcb.PhiK > 0.5, 'FR-4 board makes the load factor large: ' + pcb.PhiK);
+  ok(pcb.issues.some(i => /circuit board/.test(i.text)), 'PCB warning shown');
+  const steel = C.calculate(stateFrom(Object.assign({}, P.PRESETS.find(p => p.id === 'm3-pcb-standoff').s, { plates: [{ mat: 'S235', t: 1.6 }] })));
+  ok(steel.res.deltaP < pcb.res.deltaP / 5, 'steel plate far stiffer than FR-4');
+  const tapPcb = C.calculate(stateFrom({ joint: 'tapped', thread: 'M3', tapMat: 'FR4', plates: [{ mat: 'S235', t: 2 }] }));
+  ok(tapPcb.issues.some(i => i.level === 'error' && /tap threads into a PCB/.test(i.text)), 'tapping into a PCB is an error');
+}
+// ---- small fasteners: embedding takes a large share of the preload ----
+{
+  const r = C.calculate(stateFrom(P.PRESETS.find(p => p.id === 'm4-sheet').s));
+  ok(r.FZ / r.FMmin > 0.3, 'M4 in thin sheets loses a large share of preload to embedding: ' + (r.FZ / r.FMmin));
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

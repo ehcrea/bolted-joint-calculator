@@ -27,13 +27,17 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Preload against friction** at the tightening torque, with the yield limit and the required preload
 - **Calculation steps** R0 to R13 with formulas and substituted values
 
+## Examples
+
+14 application examples, from M16 slip-critical splices down to small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
+
 ## Libraries
 
 | Library | Contents |
 |---|---|
 | Threads | ISO 261 metric coarse M2 to M36 and fine threads, with ISO 4017 / 4032 hex and ISO 4762 socket head dimensions, ISO 273 clearance holes and ISO 7089 / 7093 washers |
 | Property classes | 4.6, 5.6, 5.8, 8.8, 10.9, 12.9 (ISO 898-1), A2/A4-50, -70, -80 (ISO 3506-1), titanium grade 5 |
-| Materials | Structural and quenched-and-tempered steels, stainless steels, grey and ductile cast iron, aluminium alloys (wrought and die-cast), magnesium, titanium, brass, POM, PA6-GF30: E, α, R<sub>m</sub>, p<sub>G</sub>, shear strength |
+| Materials | Structural and quenched-and-tempered steels, stainless steels, grey and ductile cast iron, aluminium alloys (wrought and die-cast), magnesium, titanium, brass, POM, PA6-GF30 and FR-4 circuit boards (through-thickness values): E, α, R<sub>m</sub>, p<sub>G</sub>, shear strength |
 | Friction | Oiled black oxide, zinc plated, zinc flake, MoS₂, stainless dry and with paste, aluminium parts, titanium (VDI 2230 table A5, ISO 16047 coating ranges) |
 | Tightening | Yield- and angle-controlled, ultrasonic, hydraulic tensioner, torque wrench, power tool, impact wrench (VDI 2230 table A8) |
 

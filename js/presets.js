@@ -38,6 +38,27 @@
     { id: 'thermal', label: 'M8 steel bolt clamping aluminium, +80 K in service', s: {
       joint: 'tapped', thread: 'M8', cls: '10.9', head: 'shcs', washer: '7089', washerGrade: '300HV',
       plates: [{ mat: '6082T6', t: 25 }], tapMat: 'GJS400', engage: 12, DA: 24, FAmax: 4, FQ: 0, dT: 80, method: 'tw-test' } },
+    // small fasteners: M4 and M3
+    { id: 'm3-pcb-standoff', label: 'M3 screw clamping a PCB to a brass standoff', s: {
+      joint: 'tapped', thread: 'M3', cls: '8.8', head: 'shcs', washer: '7089', washerGrade: '200HV',
+      plates: [{ mat: 'FR4', t: 1.6 }], tapMat: 'CuZn39', engage: 5, DA: 5.5, rough: 'fine', friction: 'oxide-oil',
+      method: 'tw-test', mode: 'torque', MA: 0.6, FAmax: 0.05, FAmin: 0, FQ: 0, muT: 0.2 } },
+    { id: 'm3-pcb-housing', label: 'M3 A2 screw, PCB into aluminium housing, +50 K', s: {
+      joint: 'tapped', thread: 'M3', cls: 'A2-70', head: 'shcs', washer: '7089', washerGrade: 'A2',
+      plates: [{ mat: 'FR4', t: 1.6 }], tapMat: '6082T6', engage: 6, DA: 7, rough: 'fine', friction: 'ss-paste',
+      method: 'tw-table', mode: 'torque', MA: 0.6, FAmax: 0.05, FAmin: 0, FQ: 0.03, muT: 0.2, dT: 50 } },
+    { id: 'm4-sheet', label: 'M4 10.9 bolt + nut through two 2 mm steel sheets', s: {
+      joint: 'nut', thread: 'M4', cls: '10.9', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 2 }, { mat: 'S235', t: 2 }], DA: 12, rough: 'fine', friction: 'zn-flake', method: 'tw-test',
+      FAmax: 0.3, FAmin: 0, FQ: 0.2, muT: 0.15 } },
+    { id: 'm4-alu', label: 'M4 A2-70 socket screw into aluminium (tapped)', s: {
+      joint: 'tapped', thread: 'M4', cls: 'A2-70', head: 'shcs', washer: '7089', washerGrade: 'A2',
+      plates: [{ mat: '6082T6', t: 4 }], tapMat: '6082T6', engage: 8, DA: 10, friction: 'ss-paste', method: 'tw-test',
+      FAmax: 0.5, FAmin: 0, FQ: 0, muT: 0.15 } },
+    { id: 'm3-helicoil', label: 'M3 12.9 bracket into magnesium with Heli-Coil 2d', s: {
+      joint: 'helicoil', thread: 'M3', cls: '12.9', head: 'shcs', washer: '7089', washerGrade: '300HV',
+      plates: [{ mat: 'S235', t: 2 }], tapMat: 'AZ91', hcLen: 2, DA: 9, friction: 'oxide-oil', method: 'tw-test',
+      FAmax: 0.6, FAmin: 0.2, FQ: 0.05, muT: 0.15, nu: 0.9 } },
   ];
 
   root.BJ_PRESETS = { DEFAULT, PRESETS };
