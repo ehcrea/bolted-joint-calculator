@@ -59,6 +59,24 @@
       joint: 'helicoil', thread: 'M3', cls: '12.9', head: 'shcs', washer: '7089', washerGrade: '300HV',
       plates: [{ mat: 'S235', t: 2 }], tapMat: 'AZ91', hcLen: 2, DA: 9, friction: 'oxide-oil', method: 'tw-test',
       FAmax: 0.6, FAmin: 0.2, FQ: 0.05, muT: 0.15, nu: 0.9 } },
+    // Electronics enclosures (defence, aerospace): aluminium 5083 / 6061 with stainless wire thread inserts.
+    // Short clamp lengths make settling the main concern, so each example shows one way to keep the preload.
+    { id: 'def-m25-cover', label: 'M2.5 A4-80 cover screw, 5083 lid, Heli-Coil 1.5d', s: {
+      joint: 'helicoil', thread: 'M2.5', cls: 'A4-80', head: 'shcs', washer: '7089', washerGrade: 'A2',
+      plates: [{ mat: '5083', t: 2 }], tapMat: '5083', hcLen: 1.5, DA: 6, rough: 'fine', friction: 'ss-paste',
+      method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.03, FAmin: 0, FQ: 0, muT: 0.15 } },
+    { id: 'def-m3-bracket', label: 'M3 A2-70, 6 mm 6061 module bracket, Heli-Coil 2d, no washer', s: {
+      joint: 'helicoil', thread: 'M3', cls: 'A2-70', head: 'shcs', washer: 'none',
+      plates: [{ mat: '6061T6', t: 6 }], tapMat: '6061T6', hcLen: 2, DA: 8, rough: 'fine', friction: 'ss-paste',
+      method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.03, FAmin: 0, FQ: 0.02, muT: 0.15 } },
+    { id: 'def-m4-lru', label: 'M4 A4-80 LRU flange into 5083 tray, Heli-Coil 1.5d, −55 K', s: {
+      joint: 'helicoil', thread: 'M4', cls: 'A4-80', head: 'shcs', washer: '7089', washerGrade: 'A2',
+      plates: [{ mat: '6061T6', t: 6 }], tapMat: '5083', hcLen: 1.5, DA: 10, rough: 'fine', friction: 'ss-paste',
+      method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.1, FAmin: 0, FQ: 0.05, muT: 0.15, dT: -55 } },
+    { id: 'def-m4-sleeve', label: 'M4 A2-70 with 10 mm spacer sleeve (lK/d > 3), 6061, −55 K', s: {
+      joint: 'helicoil', thread: 'M4', cls: 'A2-70', head: 'shcs', washer: '7089', washerGrade: 'A2',
+      plates: [{ mat: '6061T6', t: 3 }, { mat: '1.4301', t: 10 }], tapMat: '6061T6', hcLen: 2, DA: 10, rough: 'fine', friction: 'ss-paste',
+      method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.1, FAmin: 0, FQ: 0.05, muT: 0.15, dT: -55 } },
   ];
   // List from the smallest bolt to the largest (stable sort: same size keeps the order above).
   const size = p => parseFloat(String(p.s.thread || DEFAULT.thread).replace(/^M/, ''));

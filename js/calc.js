@@ -374,8 +374,8 @@
     // Clamp length ratio: a short, stiff bolt stretches little, so settling of a few µm costs much of the preload.
     // Common design rule (e.g. semiconductor equipment, vibration-loaded joints): l_K/d >= 3.
     const lKd = lK / d, fzShare = fmtN(Math.min(FZ / FMmin, 1) * 100, 0);
-    if (lKd < 1) add('warn', 'Very short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' < 1): the bolt stretches little, so embedding costs ' + fzShare + ' % of the minimum preload. Use a longer bolt with a spacer sleeve or a stiff washer stack to reach l<sub>K</sub>/d ≥ 3.');
-    else if (lKd < 3) add('info', 'Short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' < 3): embedding costs ' + fzShare + ' % of the minimum preload. A longer bolt with a spacer sleeve (l<sub>K</sub>/d ≥ 3) makes the preload less sensitive to settling and vibration.');
+    if (lKd < 1) add('warn', 'Very short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 1): the bolt stretches little, so embedding costs ' + fzShare + ' % of the minimum preload. Use a longer bolt with a spacer sleeve or a stiff washer stack to reach l<sub>K</sub>/d ≥ 3.');
+    else if (lKd < 3) add('info', 'Short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 3): embedding costs ' + fzShare + ' % of the minimum preload. A longer bolt with a spacer sleeve (l<sub>K</sub>/d ≥ 3) makes the preload less sensitive to settling and vibration.');
     if (lK / d > 10) add('warn', 'Very long clamp length (l<sub>K</sub>/d > 10): the cone model and the resilience formulas lose accuracy.');
     if (inp.method === 'yield' || inp.method === 'angle') {
       if (inp.mode !== 'torque' && nu < 0.99) add('info', 'With yield- or angle-controlled tightening the bolt is tightened to its yield point: set ν = 1.0.');

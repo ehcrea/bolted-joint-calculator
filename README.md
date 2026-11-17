@@ -30,7 +30,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 
 ## Examples
 
-14 application examples, from M16 slip-critical splices down to small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
+18 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
 
 ## Libraries
 
