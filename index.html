@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -320,11 +320,11 @@
     <h3 id="help-pcb">Mounting circuit boards (PCBs)</h3>
     <p>Choose <b>PCB FR-4</b> as a clamped part. A board behaves differently from a metal plate:</p>
     <ul>
-      <li><b>Soft through its thickness.</b> FR-4 has E<sub>z</sub> ≈ 10 GPa, about 1/20 of steel. The board compresses more than the screw stretches, so a large share of any pull-off load (Φ<sub>K</sub> ≈ <span data-pcb="phi">0.6</span> for an M3 through 1.6 mm) reaches the screw.</li>
-      <li><b>That softness helps against settling.</b> The embedding of head, washer and thread (about <span data-pcb="fz">9</span> µm) costs less preload than in a thin steel plate, where it can remove nearly all the preload of a small screw. Thicker boards keep more preload.</li>
-      <li><b>The board limits the torque, not the screw.</b> At 0.6 N·m, a safe torque for the board, an M3 8.8 screw uses only about <span data-pcb="nu">45</span> % of its yield strength.</li>
+      <li><b>Soft through its thickness.</b> FR-4 has E<sub>z</sub> ≈ <span data-pcb="ez">10</span> GPa, about <span data-pcb="eratio">1/20</span> of steel. Under preload the board compresses <span data-pcb="dp">15</span> µm, <span data-pcb="cmp">more than the screw stretches (8 µm)</span>, so <span data-pcb="share">a large share</span> of any pull-off load (Φ<sub>K</sub> ≈ <span data-pcb="phi">0.6</span> for an M3 through 1.6 mm) reaches the screw.</li>
+      <li><b data-pcb="settle-head">That softness helps against settling.</b> The embedding of head, washer and thread (about <span data-pcb="fz">9</span> µm) costs <span data-pcb="fzpct">58</span> % of the minimum preload, <span data-pcb="steelcmp">against all of it in a 1.6 mm steel plate</span>. <span data-pcb="thick">Thicker boards keep more preload.</span></li>
+      <li><b>The board limits the torque, not the screw.</b> At <span data-pcb="hi">0.6</span> N·m, the highest torque that keeps the board pressure within 2/3 of its limit, an M3 8.8 screw uses only about <span data-pcb="nu">45</span> % of its yield strength.</li>
       <li><b>Creep is the main long-term loss</b>, especially above about 80 °C and near the glass transition T<sub>g</sub>. The calculator warns about it but does not compute it.</li>
-      <li><b>Temperature:</b> FR-4 expands about 60 ppm/K through its thickness (about 250 ppm/K above T<sub>g</sub>), much more than a steel screw. Heating raises the screw force and the board pressure; cooling lowers the clamp.</li>
+      <li><b>Temperature:</b> FR-4 expands about <span data-pcb="alpha">60</span> ppm/K through its thickness (about 250 ppm/K above T<sub>g</sub>), about <span data-pcb="aratio">5</span> times as much as a steel screw. Heating raises the screw force and the board pressure; cooling lowers the clamp.</li>
     </ul>
     <p>M3 screw with washer, 1.6 mm board on a brass standoff, oiled steel screw, torque wrench. Calculated live from the "PCB on a standoff" example:</p>
     <div class="table-wrap"><table class="data">
@@ -334,8 +334,8 @@
     <p>Good practice:</p>
     <ul>
       <li>Clamp on a bare copper or ENIG pad (a ring free of solder mask) a little larger than the washer.</li>
-      <li>Always use a washer, or a screw with a built-in washer or flange. Without one the head presses about <span data-pcb="nowasher">115</span> MPa into the board at 0.6 N·m.</li>
-      <li>Use about 0.5–0.6 N·m for M3 with a controlled screwdriver. Against vibration use thread-locking compound or a locking feature rather than more torque.</li>
+      <li>Always use a washer, or a screw with a built-in washer or flange. Without one the head presses about <span data-pcb="nowasher">115</span> MPa into the board at <span data-pcb="hi">0.6</span> N·m (limit <span data-pcb="pg">100</span> MPa).</li>
+      <li><span data-pcb="range">Use about 0.5–0.6 N·m for M3</span> with a controlled screwdriver. <span data-pcb="range-why">The lower end keeps at least 25 % of the preload after settling, the upper end keeps the board pressure within 2/3 of its limit.</span> Against vibration use thread-locking compound or a locking feature rather than more torque.</li>
       <li>Never tap threads into the board: use a nut, a standoff, or a press-fit or SMD nut.</li>
       <li>Keep ceramic capacitors (MLCCs), BGAs and other strain-sensitive parts a few millimetres away from mounting holes.</li>
     </ul>
@@ -344,10 +344,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=12"></script>
-  <script src="js/calc.js?v=12"></script>
-  <script src="js/presets.js?v=12"></script>
-  <script src="js/drawing.js?v=12"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/data.js?v=13"></script>
+  <script src="js/calc.js?v=13"></script>
+  <script src="js/presets.js?v=13"></script>
+  <script src="js/drawing.js?v=13"></script>
+  <script src="js/app.js?v=13"></script>
 </body>
 </html>

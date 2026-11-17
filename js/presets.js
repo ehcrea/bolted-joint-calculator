@@ -13,7 +13,7 @@
   };
 
   const PRESETS = [
-    { id: 'flange', label: 'Steel flange, M10 10.9 bolt + nut', s: {} },
+    { id: 'flange', label: 'M10 10.9 bolt + nut, steel flange', s: {} },
     { id: 'al-tapped', label: 'M6 12.9 socket screw into aluminium (tapped)', s: {
       joint: 'tapped', thread: 'M6', cls: '12.9', head: 'shcs', washer: '7089', washerGrade: '300HV', plates: [{ mat: '6082T6', t: 8 }],
       tapMat: '6082T6', engage: 12, holeFit: 'medium', DA: 16, FAmax: 3, FAmin: 0, FQ: 0.5, muT: 0.15, method: 'tw-test', nu: 0.7 } },
@@ -60,6 +60,9 @@
       plates: [{ mat: 'S235', t: 2 }], tapMat: 'AZ91', hcLen: 2, DA: 9, friction: 'oxide-oil', method: 'tw-test',
       FAmax: 0.6, FAmin: 0.2, FQ: 0.05, muT: 0.15, nu: 0.9 } },
   ];
+  // List from the smallest bolt to the largest (stable sort: same size keeps the order above).
+  const size = p => parseFloat(String(p.s.thread || DEFAULT.thread).replace(/^M/, ''));
+  PRESETS.sort((a, b) => size(a) - size(b));
 
   root.BJ_PRESETS = { DEFAULT, PRESETS };
 })(window);

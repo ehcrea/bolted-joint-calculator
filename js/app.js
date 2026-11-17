@@ -378,7 +378,9 @@
   }
 
   // ---------------- PCB section of the Help dialog (calculated from the standoff example) ----------------
-  const PCB_TORQUES = [0.3, 0.5, 0.6, 1.0];
+  // Recommended torque window: the lowest torque that keeps >= 25 % of the preload after settling,
+  // and the highest that keeps the board pressure within 2/3 of its limit p_G.
+  const PCB_KEEP = 0.25, PCB_PFRAC = 2 / 3;
   function pcbCase(overrides) {
     const p = PR.PRESETS.find(x => x.id === 'm3-pcb-standoff');
     const s = Object.assign(clone(PR.DEFAULT), clone(p.s), overrides || {});
@@ -387,26 +389,75 @@
     return C.calculate(s);
   }
   function boardPressure(r) { return r.pressures.find(p => /FR-4/.test(p.mat)); }
+  function pcbWindow() {
+    let lo = null, hi = null;
+    for (let i = 2; i <= 40; i++) {
+      const MA = Math.round(i * 5) / 100, r = pcbCase({ mode: 'torque', MA }), bp = boardPressure(r);
+      if (lo === null && r.FVmin / r.FMmin >= PCB_KEEP) lo = MA;
+      if (bp && bp.p <= PCB_PFRAC * bp.pG) hi = MA;
+    }
+    return { lo, hi, ok: lo !== null && hi !== null && lo <= hi };
+  }
   function renderPcbHelp() {
     const body = $('#pcb-table');
     if (!body) return;
     try {
-      body.innerHTML = PCB_TORQUES.map(MA => {
+      const set = (k, v) => $$(`[data-pcb="${k}"]`).forEach(el => { el.textContent = v; });
+      const win = pcbWindow();
+      const MAref = win.hi !== null ? win.hi : 0.6;
+      const torques = [0.3, win.lo, win.hi, 1.0].filter(x => x !== null)
+        .filter((x, i, a) => a.indexOf(x) === i).sort((x, y) => x - y);
+      body.innerHTML = torques.map(MA => {
         const r = pcbCase({ mode: 'torque', MA });
         const bp = boardPressure(r);
         const over = bp && bp.p > bp.pG;
         const left = r.FVmin <= 0 ? '<span class="status error">none: can loosen</span>'
           : f(r.FVmin / 1000, 2) + ' kN' + (over ? ', <span class="status error">board overloaded</span>' : '');
-        return `<tr><td class="left">${f(MA, 1)} N·m</td><td>${f(r.FMmin / 1000, 2)}–${f(r.FMmax / 1000, 2)} kN</td>` +
+        return `<tr><td class="left">${f(MA, 2)} N·m</td><td>${f(r.FMmin / 1000, 2)}–${f(r.FMmax / 1000, 2)} kN</td>` +
           `<td${over ? ' class="status error"' : ''}>${bp ? f(bp.p, 0) : '—'} MPa</td><td>${left}</td></tr>`;
       }).join('');
-      const ref = pcbCase({ mode: 'torque', MA: 0.6 });
-      const bare = pcbCase({ mode: 'torque', MA: 0.6, washer: 'none' });
-      const set = (k, v) => $$(`[data-pcb="${k}"]`).forEach(el => { el.textContent = v; });
+
+      const ref = pcbCase({ mode: 'torque', MA: MAref });
+      const bare = pcbCase({ mode: 'torque', MA: MAref, washer: 'none' });
+      const steel = pcbCase({ mode: 'torque', MA: MAref, plates: [{ mat: 'S235', t: 1.6 }] });
+      const thin = pcbCase({ mode: 'torque', MA: MAref, plates: [{ mat: 'FR4', t: 0.8 }] });
+      const thick = pcbCase({ mode: 'torque', MA: MAref, plates: [{ mat: 'FR4', t: 2.4 }] });
+      const fr4 = D.MATERIALS.FR4, steelE = D.MATERIALS.S235.E, screw = D.BOLT_CLASSES['8.8'];
+      const bp = boardPressure(ref);
+
+      // stiffness
+      set('ez', f(fr4.E / 1000, 0));
+      set('eratio', '1/' + f(steelE / fr4.E, 0));
+      const FM = (ref.FMmin + ref.FMmax) / 2, dP = FM * ref.res.deltaP * 1000, dS = FM * ref.res.deltaS * 1000;
+      set('dp', f(dP, 1));
+      set('cmp', (dP > dS ? 'more than' : 'less than') + ` the screw stretches (${f(dS, 1)} µm)`);
+      set('share', ref.PhiK > 0.5 ? 'a large share' : ref.PhiK > 0.25 ? 'a moderate share' : 'only a small share');
       set('phi', f(ref.PhiK, 2));
+
+      // settling
+      const fzFrac = ref.FZ / ref.FMmin, steelFrac = steel.FZ / steel.FMmin;
+      set('settle-head', fzFrac < steelFrac ? 'That softness helps against settling.' : 'Settling still costs preload.');
       set('fz', f(ref.emb.fZum, 1));
+      set('fzpct', f(Math.min(fzFrac, 1) * 100, 0));
+      set('steelcmp', steelFrac >= 1 ? 'against all of it in a 1.6 mm steel plate, which can then come loose'
+        : `against ${f(steelFrac * 100, 0)} % in a 1.6 mm steel plate`);
+      const keep = r => Math.max(r.FVmin, 0) / r.FMmin;
+      set('thick', keep(thick) > keep(thin)
+        ? `Thicker boards keep more preload: ${f(keep(thin) * 100, 0)} % at 0.8 mm, ${f(keep(thick) * 100, 0)} % at 2.4 mm.`
+        : `Board thickness changes little here: ${f(keep(thin) * 100, 0)} % kept at 0.8 mm, ${f(keep(thick) * 100, 0)} % at 2.4 mm.`);
+
+      // torque
+      set('hi', f(MAref, 2));
       set('nu', f(ref.nuActual * 100, 0));
       set('nowasher', f(boardPressure(bare).p, 0));
+      set('pg', f(bp ? bp.pG : fr4.pG, 0));
+      set('range', win.ok ? `Use about ${f(win.lo, 2)}–${f(win.hi, 2)} N·m for M3`
+        : 'No torque meets both limits for this M3 example: use a thicker board, a larger washer or a stiffer standoff, and tighten');
+      set('range-why', `The lower end keeps at least ${f(PCB_KEEP * 100, 0)} % of the preload after settling, the upper end keeps the board pressure within 2/3 of its limit.`);
+
+      // temperature
+      set('alpha', f(fr4.alpha * 1e6, 0));
+      set('aratio', f(fr4.alpha / screw.alpha, 0));
     } catch (e) {
       console.error(e);
       body.innerHTML = '<tr><td class="left" colspan="4">Could not calculate the table.</td></tr>';
