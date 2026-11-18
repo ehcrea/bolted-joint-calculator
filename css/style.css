@@ -484,3 +484,9 @@ svg .nut-prof { fill: color-mix(in srgb, var(--s1) 22%, var(--surface)); stroke:
 
 /* flexible flange */
 h3.sub { font-size: 14px; font-weight: 600; margin: 18px 0 8px; }
+
+/* custom bolt positions */
+textarea[data-key] { width: 100%; box-sizing: border-box; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px 10px;
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface, transparent); color: inherit; resize: vertical; }
+.pat-fill { font-size: 13px; margin: 6px 0 10px; color: var(--text-2); }
+.btn-link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }

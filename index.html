@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=27">
+  <link rel="stylesheet" href="css/style.css?v=29">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -221,7 +221,7 @@
         <div data-show="pat">
           <div class="grid2">
             <label>Pattern
-              <select data-key="patType"><option value="circle">Circular (bolt circle)</option><option value="rect">Rectangular grid</option></select>
+              <select data-key="patType"><option value="circle">Circular (bolt circle)</option><option value="rect">Rectangular grid</option><option value="custom">Custom positions</option></select>
             </label>
             <label><span class="lt">Bending model <span class="tip" tabindex="0" title="Centroid: the joint stays closed and the flange rotates about the bolt-group centroid (preloaded joints, VDI 2230 Part 2 approach while there is no opening). Heel: the flange has opened and tips about its edge; use it for ultimate loads or joints that may separate. Prying forces are not included.">ⓘ</span></span>
               <select data-key="patMethod"><option value="centroid">Centroid (joint closed)</option><option value="heel">Heel at flange edge (opened)</option></select>
@@ -238,7 +238,16 @@
             <label data-show="pat-rect"><span class="lt">Flange size L<sub>y</sub></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patLy"></label>
           </div>
           <label class="check" data-show="pat-rect"><input type="checkbox" data-key="patPerimeter"> Bolts on the perimeter only</label>
-          <p class="hint">Loads on the whole flange: F<sub>z</sub> at (x<sub>F</sub>, y<sub>F</sub>), the others at the pattern centre. z is the bolt axis (pulling the joint apart is +); moments follow the right-hand rule.</p>
+          <div data-show="pat-custom">
+            <label><span class="lt">Bolt positions x, y <span class="tip" tabindex="0" title="One bolt per line, x and y in mm from any origin you like (e.g. a drawing datum). Separate with a comma, space or tab, so two columns pasted from a spreadsheet work. Lines starting with # are ignored. The tool works about the bolt-group centroid.">ⓘ</span></span> <span class="u">(mm, one bolt per line)</span>
+              <textarea data-key="patPts" data-text rows="6" spellcheck="false" placeholder="0, 0&#10;80, 0&#10;80, 60&#10;0, 60"></textarea></label>
+            <p class="hint" id="pat-pts-info"></p>
+            <div class="pat-fill">Start from: <button type="button" class="btn-link" data-fill="circle">current circle</button> · <button type="button" class="btn-link" data-fill="rect">current grid</button></div>
+            <div class="grid2">
+              <label><span class="lt">Edge beyond outermost bolt <span class="tip" tabindex="0" title="Distance from the outermost bolt to the flange edge on the compression side, for the heel model.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patEdge"></label>
+            </div>
+          </div>
+          <p class="hint">Loads on the whole flange: F<sub>z</sub> at (x<sub>F</sub>, y<sub>F</sub>), the others at the pattern centre (centroid C for custom positions). z is the bolt axis (pulling the joint apart is +); moments follow the right-hand rule.</p>
           <div class="grid2">
             <label><span class="lt">F<sub>x</sub></span> <span class="u">(kN)</span><input type="number" step="any" data-key="patFx"></label>
             <label><span class="lt">M<sub>x</sub> <span class="tip" tabindex="0" title="Bending about x: a positive Mx loads the bolts on the +y side in tension.">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMx"></label>
@@ -436,10 +445,10 @@
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
     <h3 id="help-pattern">Bolt patterns</h3>
-    <p>Tick <b>Loads act on a bolt pattern</b> in section 6 and enter the forces and moments on the whole flange. The axial load F<sub>z</sub> can act off-centre at (x<sub>F</sub>, y<sub>F</sub>). By default the tool treats the flange as rigid (the classical bolt-group model):</p>
+    <p>Tick <b>Loads act on a bolt pattern</b> in section 6 and enter the forces and moments on the whole flange. The axial load F<sub>z</sub> can act off-centre at (x<sub>F</sub>, y<sub>F</sub>). The bolts form a circle, a rectangular grid, or <b>custom positions</b>: paste x, y in mm, one bolt per line, from any origin (a drawing datum, or two columns from a spreadsheet). For custom patterns the coordinates and x<sub>F</sub>, y<sub>F</sub> use your origin; the tool moves everything to the bolt-group centroid C, which is shown in the plan view. <i>Start from</i> copies the current circle or grid into the list so you can edit single bolts. By default the tool treats the flange as rigid (the classical bolt-group model):</p>
     <ul>
       <li><b>Shear</b> F<sub>x</sub>, F<sub>y</sub> is shared equally; torsion M<sub>z</sub> adds a shear M<sub>z</sub>·r<sub>i</sub>/Σr² at right angles to each bolt radius.</li>
-      <li><b>Tension</b> F<sub>z</sub> is shared equally; bending adds M·y<sub>i</sub>/Σy² about the bolt-group centroid (<b>centroid model</b>, valid while the preloaded joint stays closed) or M·h<sub>i</sub>/Σh² about the flange edge (<b>heel model</b>, for a joint that has opened or for ultimate loads).</li>
+      <li><b>Tension</b> F<sub>z</sub> is shared equally; bending adds M·y<sub>i</sub>/Σy² about the bolt-group centroid (<b>centroid model</b>, valid while the preloaded joint stays closed; for unsymmetric patterns with Σxy ≠ 0 the tool solves Σx²·b + Σxy·c = −M<sub>y</sub>, Σxy·b + Σy²·c = M<sub>x</sub> and uses F<sub>A,i</sub> = F<sub>z</sub>/n + b·x<sub>i</sub> + c·y<sub>i</sub>; bolts on one line cannot carry the moment about that line, which is flagged) or M·h<sub>i</sub>/Σh² about the flange edge (<b>heel model</b>, for a joint that has opened or for ultimate loads; for custom patterns the edge lies the given distance beyond the outermost bolt).</li>
       <li>The bolt with the highest tension and the highest shear are combined into one design bolt (conservative if they are different bolts), which runs through all the checks.</li>
     </ul>
     <p><b>Flexible flange</b> (rectangular patterns, centroid model). A rigid flange shares a load by lever arms alone. A real flange bends, so the bolts close to a local load take more and the distant ones less. Tick <b>Flexible flange</b> to model the flange as a beam along x (Euler–Bernoulli, width L<sub>y</sub>, thickness t, E of the first clamped part) resting on one spring per bolt column:</p>
@@ -516,10 +525,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=27"></script>
-  <script src="js/calc.js?v=27"></script>
-  <script src="js/presets.js?v=27"></script>
-  <script src="js/drawing.js?v=27"></script>
-  <script src="js/app.js?v=27"></script>
+  <script src="js/data.js?v=29"></script>
+  <script src="js/calc.js?v=29"></script>
+  <script src="js/presets.js?v=29"></script>
+  <script src="js/drawing.js?v=29"></script>
+  <script src="js/app.js?v=29"></script>
 </body>
 </html>

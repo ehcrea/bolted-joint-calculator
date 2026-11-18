@@ -238,6 +238,38 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   near(pp.FAmax, 2000 * (1 + pp.pry.ratio), 1e-12, 'prying on the pattern bolt load');
 }
 
+// ---- custom bolt positions ----
+{
+  const pp = C.parsePoints('0, 0\n60\t0\n# comment\n120 0\nabc\n0,50; 0,100');
+  ok(pp.pts.length === 5 && pp.bad.length === 1, 'custom positions: comma, tab, space, ";" pairs and comments read; bad line reported');
+  const base = { patOn: true, patR: 0, FQ: 0 };
+  // a 3 x 2 grid entered as custom positions (shifted origin) gives the rectangular result
+  const rectS = Object.assign({}, base, { patType: 'rect', patNx: 3, patNy: 2, patSx: 50, patSy: 40, patPerimeter: false, patFz: 6, patMx: 80, patMy: -40, patFx: 1, patMz: 30, patXF: 10, patYF: -5 });
+  const pts = C.patternBolts(stateFrom(rectS)).map(p => (p.x + 200) + ', ' + (p.y + 100)).join('\n');
+  const cuS = Object.assign({}, rectS, { patType: 'custom', patPts: pts, patXF: 210, patYF: 95 });
+  const R = C.calculate(stateFrom(rectS)).pat, U = C.calculate(stateFrom(cuS)).pat;
+  near(U.cx0, 200, 1e-12, 'custom: centroid x'); near(U.cy0, 100, 1e-12, 'custom: centroid y');
+  R.bolts.forEach((b, i) => { near(U.bolts[i].FA, b.FA, 1e-9, 'custom grid = rect, tension bolt ' + b.i); near(U.bolts[i].FQ, b.FQ, 1e-9, 'custom grid = rect, shear bolt ' + b.i); });
+  // irregular pattern (Σxy ≠ 0): equilibrium of force and both moments
+  const irr = C.calculate(stateFrom(Object.assign({}, base, { patType: 'custom', patPts: '0, 0\n70, 0\n140, 10\n0, 60\n100, 80', patFz: 6, patXF: 130, patYF: 70, patMx: 50, patMy: -30 }))).pat;
+  ok(Math.abs(irr.Sxy) > 1, 'irregular pattern has Σxy ≠ 0');
+  near(irr.bolts.reduce((s, b) => s + b.FA, 0), 6000, 1e-9, 'irregular: Σ F_A = F_z');
+  near(irr.bolts.reduce((s, b) => s + b.FA * b.y, 0), 50000 + 6000 * irr.yF, 1e-9, 'irregular: Σ F_A·y = M_x');
+  near(irr.bolts.reduce((s, b) => s + b.FA * b.x, 0), 30000 + 6000 * irr.xF, 1e-9, 'irregular: Σ F_A·x = −M_y');
+  // the result does not depend on the origin the user picks
+  const sh = C.calculate(stateFrom(Object.assign({}, base, { patType: 'custom', patPts: '-500, 300\n-430, 300\n-360, 310\n-500, 360\n-400, 380', patFz: 6, patXF: -370, patYF: 370, patMx: 50, patMy: -30 }))).pat;
+  irr.bolts.forEach((b, i) => near(sh.bolts[i].FA, b.FA, 1e-9, 'origin-independent, bolt ' + b.i));
+  // bolts on a diagonal line: moment across the line cannot be carried → warning; along the line it is
+  const line = C.calculate(stateFrom(Object.assign({}, base, { patType: 'custom', patPts: '0, 0\n30, 30\n60, 60', patMx: 60 })));
+  ok(line.issues.some(i => /one line/.test(i.text)), 'collinear bolts: warning for the moment about the line');
+  near(line.pat.bolts.reduce((s, b) => s + b.FA * (b.x + b.y) / Math.SQRT2, 0), 60000 / Math.SQRT2, 1e-9, 'collinear bolts: moment component along the line carried');
+  // heel model: heel at the outermost bolt plus the edge distance
+  const heel = C.calculate(stateFrom(Object.assign({}, base, { patType: 'custom', patPts: '0, 0\n0, 100\n50, 50', patMethod: 'heel', patMx: 100, patEdge: 20 }))).pat;
+  near(heel.c, 50 + 20, 1e-12, 'custom heel line at outermost bolt + edge');
+  const bad = C.calculate(stateFrom(Object.assign({}, base, { patType: 'custom', patPts: '10, 10' })));
+  ok(bad.issues.some(i => i.level === 'error'), 'custom pattern with one bolt is an error');
+}
+
 // ---- flexible flange (beam on elastic bolt supports) ----
 {
   const base = { thread: 'M8', cls: '8.8', plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 20 }], FQ: 0,

@@ -86,9 +86,32 @@
   function stdLengthAtMost(l) { let r = null; for (const x of STD_LENGTHS) if (x <= l + 1e-9) r = x; return r; }
 
   // ---------------- bolt pattern: load distribution over a rigid flange ----------------
-  // Bolt positions for a circular or rectangular pattern, centred on the pattern centroid (mm).
+  // Custom positions: one bolt per line, "x, y" (comma, semicolon, space or tab; pasted spreadsheet columns work).
+  function parsePoints(text) {
+    const pts = [], bad = [];
+    // lines; a line holding several "x, y" pairs separated by ";" is split as well
+    String(text || '').split(/\r?\n/).flatMap(l => (l.includes(',') && l.includes(';') ? l.split(';') : [l])).forEach((line, i) => {
+      const s = line.replace(/#.*/, '').trim();
+      if (!s) return;
+      const m = s.split(/[\s,;]+/).filter(Boolean).map(Number);
+      if (m.length >= 2 && isFinite(m[0]) && isFinite(m[1])) pts.push({ x: m[0], y: m[1] });
+      else bad.push(i + 1);
+    });
+    return { pts, bad };
+  }
+
+  // Bolt positions for a circular, rectangular or custom pattern, centred on the bolt-group centroid (mm).
+  // The returned array carries cx, cy: the centroid in the user's coordinates (0, 0 for circle and rect).
   function patternBolts(inp) {
-    const pts = [];
+    let pts = [];
+    if (inp.patType === 'custom') {
+      const pp = parsePoints(inp.patPts);
+      const n = pp.pts.length;
+      const cx = n ? pp.pts.reduce((s, p) => s + p.x, 0) / n : 0, cy = n ? pp.pts.reduce((s, p) => s + p.y, 0) / n : 0;
+      pts = pp.pts.map(p => ({ x: p.x - cx, y: p.y - cy }));
+      pts.cx = cx; pts.cy = cy; pts.bad = pp.bad;
+      return pts;
+    }
     if (inp.patType === 'rect') {
       const nx = Math.max(1, Math.round(+inp.patNx || 2)), ny = Math.max(1, Math.round(+inp.patNy || 2));
       const sx = Math.max(0, +inp.patSx || 0), sy = Math.max(0, +inp.patSy || 0);
@@ -100,6 +123,7 @@
       const n = Math.max(2, Math.round(+inp.patN || 4)), R = Math.max(0, +inp.patPCD || 0) / 2, a0 = (+inp.patAngle || 0) * PI / 180;
       for (let i = 0; i < n; i++) { const a = a0 + 2 * PI * i / n; pts.push({ x: R * Math.cos(a), y: R * Math.sin(a) }); }
     }
+    pts.cx = 0; pts.cy = 0; pts.bad = [];
     return pts;
   }
   // Solve A·x = b (dense, Gaussian elimination with partial pivoting); returns null if singular.
@@ -172,27 +196,41 @@
   function boltPattern(inp, stiff) {
     const pts = patternBolts(inp), n = pts.length;
     const Fx = (+inp.patFx || 0) * 1000, Fy = (+inp.patFy || 0) * 1000, Fz = (+inp.patFz || 0) * 1000;
-    const xF = +inp.patXF || 0, yF = +inp.patYF || 0;
+    const xF = (+inp.patXF || 0) - pts.cx, yF = (+inp.patYF || 0) - pts.cy;      // relative to the centroid
     const Mx0 = (+inp.patMx || 0) * 1000, My0 = (+inp.patMy || 0) * 1000, Mz = (+inp.patMz || 0) * 1000;
     const Mx = Mx0 + Fz * yF, My = My0 - Fz * xF;
     const Sx2 = pts.reduce((s, p) => s + p.x * p.x, 0), Sy2 = pts.reduce((s, p) => s + p.y * p.y, 0), Sr2 = Sx2 + Sy2;
+    const Sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
+    // Centroid model for any pattern: F_i = F_z/n + b·x_i + c·y_i with Σx²·b + Σxy·c = −M_y and Σxy·b + Σy²·c = M_x.
+    // Bolts on one line cannot carry the moment about that line: only the component along the line is shared.
+    const det = Sx2 * Sy2 - Sxy * Sxy;
+    let bx = 0, cy_ = 0, lineDir = null, unresisted = 0;
     const method = inp.patMethod === 'heel' ? 'heel' : 'centroid';
     const Mb = Math.hypot(Mx, My);
     const u = Mb > 0 ? { x: -My / Mb, y: Mx / Mb } : { x: 0, y: 1 };      // direction towards the tension side
+    if (Sr2 > 0 && det > 1e-9 * Sr2 * Sr2) { bx = (-My * Sy2 - Mx * Sxy) / det; cy_ = (Mx * Sx2 + My * Sxy) / det; }
+    else if (Sr2 > 0) {
+      const th = 0.5 * Math.atan2(2 * Sxy, Sx2 - Sy2), ex = Math.cos(th), ey = Math.sin(th);
+      const Ss2 = pts.reduce((s, p) => s + Math.pow(p.x * ex + p.y * ey, 2), 0);
+      const k = (-My * ex + Mx * ey) / Ss2;
+      bx = k * ex; cy_ = k * ey; lineDir = { x: ex, y: ey };
+      unresisted = Math.abs(My * ey + Mx * ex);
+    } else unresisted = Math.hypot(Mx, My);
     let c = 0, Sh2 = 0;
     if (method === 'heel') {
-      if (inp.patType === 'rect') c = Math.abs(u.x) * (+inp.patLx || 0) / 2 + Math.abs(u.y) * (+inp.patLy || 0) / 2;
-      else c = (+inp.patDf || 0) / 2;
       const maxProj = Math.max(...pts.map(p => -(p.x * u.x + p.y * u.y)));
+      if (inp.patType === 'rect') c = Math.abs(u.x) * (+inp.patLx || 0) / 2 + Math.abs(u.y) * (+inp.patLy || 0) / 2;
+      else if (inp.patType === 'custom') c = maxProj + Math.max(0, +inp.patEdge || 0);   // edge distance beyond the outermost bolt
+      else c = (+inp.patDf || 0) / 2;
       c = Math.max(c, maxProj);                                              // heel at least at the outermost bolt
       Sh2 = pts.reduce((s, p) => s + Math.pow(p.x * u.x + p.y * u.y + c, 2), 0);
     }
     const bolts = pts.map((p, i) => {
       let FA;
       if (method === 'heel') { const h = p.x * u.x + p.y * u.y + c; FA = Fz / n + (Sh2 > 0 ? Mb * h / Sh2 : 0); p.h = h; }
-      else FA = Fz / n + (Sy2 > 0 ? Mx * p.y / Sy2 : 0) - (Sx2 > 0 ? My * p.x / Sx2 : 0);
+      else FA = Fz / n + bx * p.x + cy_ * p.y;
       const qx = Fx / n - (Sr2 > 0 ? Mz * p.y / Sr2 : 0), qy = Fy / n + (Sr2 > 0 ? Mz * p.x / Sr2 : 0);
-      return { i: i + 1, x: p.x, y: p.y, h: p.h, FA, FAt: Math.max(0, FA), qx, qy, FQ: Math.hypot(qx, qy) };
+      return { i: i + 1, x: p.x, y: p.y, xu: p.x + pts.cx, yu: p.y + pts.cy, h: p.h, FA, FAt: Math.max(0, FA), qx, qy, FQ: Math.hypot(qx, qy) };
     });
     // flexible flange (rectangular pattern, joint closed): x direction from the beam on elastic supports, y rigid
     let flex = null;
@@ -219,7 +257,8 @@
     if (critA.FQ >= critQ.FQ * (1 - 1e-9)) critQ = critA;          // ties: report the max-tension bolt
     const ratio = Math.min(1, Math.max(0, +inp.patR || 0));
     const rigidMax = flex ? Math.max(0, ...bolts.map(b => b.FArigid)) : null;
-    return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Mx0, My0, xF, yF, Sx2, Sy2, Sr2, Sh2, c, u, Mb, critA, critQ, flex, rigidMax,
+    return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Mx0, My0, xF, yF, Sx2, Sy2, Sxy, Sr2, Sh2, det, bx, cy: cy_, lineDir, unresisted,
+      custom: inp.patType === 'custom', cx0: pts.cx, cy0: pts.cy, bad: pts.bad, c, u, Mb, critA, critQ, flex, rigidMax,
       FAmax: Math.max(0, critA.FA), FQmax: critQ.FQ, ratio, sameBolt: critA.FQ >= critQ.FQ * (1 - 1e-9),
       compression: bolts.some(b => b.FA < 0) };
   }
@@ -242,7 +281,9 @@
       if (stiff) pat.stiff = stiff;
       if (wantFlex && !pat.flex) add('warn', 'Flexible flange: needs a rectangular pattern with at least two bolt columns along x, the centroid model (joint closed) and a flange thickness. The rigid model is used.');
       inp = Object.assign({}, inp, { FAmax: pat.FAmax / 1000, FAmin: pat.ratio * pat.FAmax / 1000, FQ: pat.FQmax / 1000 });
-      if (pat.n < 2) add('error', 'The bolt pattern needs at least two bolts.');
+      if (pat.n < 2) add('error', 'The bolt pattern needs at least two bolts' + (pat.custom ? ': enter one bolt per line as x, y (mm).' : '.'));
+      if (pat.bad && pat.bad.length) add('warn', 'Custom bolt positions: line ' + pat.bad.join(', ') + ' could not be read and is ignored. Enter x, y in mm, one bolt per line.');
+      if (pat.method === 'centroid' && pat.unresisted > 1e-6 * (Math.abs(pat.Mx) + Math.abs(pat.My) + 1)) add('warn', 'Bolt pattern: all bolts lie on one line, so the moment about that line (' + fmtN(pat.unresisted / 1000, 1) + ' N·m) cannot be carried by bolt tension in the centroid model. It must be taken by contact at the flange edge: use the heel model or add bolts off the line.');
       if (!pat.sameBolt && pat.FQmax > 0 && pat.FAmax > 0) add('info', 'Bolt pattern: the highest tension (bolt ' + pat.critA.i + ') and the highest shear (bolt ' + pat.critQ.i + ') are on different bolts. Both maxima are applied to one bolt, which is conservative.');
       if (pat.method === 'centroid' && pat.compression && pat.Mb > 0) add('info', 'Bolt pattern: bending is taken about the bolt-group centroid, which assumes the joint stays closed (check that the residual clamp load stays positive). For a joint that may open, or for ultimate loads, use the heel model.');
     }
@@ -785,7 +826,7 @@
     return dec > 0 ? s.replace(/\.?0+$/, '') || '0' : s;
   }
 
-  const CALC = { calculate, boltPattern, patternBolts, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
+  const CALC = { calculate, boltPattern, patternBolts, parsePoints, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
   if (typeof module !== 'undefined' && module.exports) module.exports = CALC;
   else root.BJ_CALC = CALC;
 })(typeof window !== 'undefined' ? window : globalThis);

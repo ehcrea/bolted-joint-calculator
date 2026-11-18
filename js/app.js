@@ -48,7 +48,7 @@
       el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
         const k = el.dataset.key;
         if (el.type === 'checkbox') state[k] = el.checked;
-        else if (el.tagName === 'SELECT') state[k] = el.value;
+        else if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') state[k] = el.value;
         else state[k] = el.value === '' ? '' : parseFloat(el.value);
         if (/^mu[GK](min|max)$/.test(k) && state.friction !== 'custom') { copyFriction(); state.friction = 'custom'; state[k] = el.value === '' ? '' : parseFloat(el.value); }
         if (k === 'friction') copyFriction();
@@ -62,6 +62,13 @@
     bindSeg('#mode', 'mode', () => {
       if (state.mode === 'torque' && lastResult && lastResult.valid) state.MA = Math.round(lastResult.MA / 100) / 10;
     });
+    // custom bolt pattern: fill the list from the circular or rectangular inputs
+    $$('[data-fill]').forEach(b => b.addEventListener('click', () => {
+      const pts = C.patternBolts(Object.assign({}, state, { patType: b.dataset.fill }));
+      const r2 = x => Math.round(x * 100) / 100 + 0;
+      state.patPts = pts.map(p => r2(p.x) + ', ' + r2(p.y)).join('\n');
+      update();
+    }));
     $('#add-plate').addEventListener('click', () => {
       if (state.plates.length >= 5) return;
       const last = state.plates[state.plates.length - 1] || { mat: 'S235', t: 10 };
@@ -157,7 +164,7 @@
       pry: !!state.pryOn,
       ecc: !!state.eccOn,
       pat: !!state.patOn, 'no-pat': !state.patOn,
-      'pat-circle': state.patType !== 'rect', 'pat-rect': state.patType === 'rect',
+      'pat-circle': state.patType === 'circle' || !state.patType, 'pat-rect': state.patType === 'rect', 'pat-custom': state.patType === 'custom',
       'pat-flex': !!state.patOn && state.patType === 'rect' && !!state.patFlex,
     };
     $$('[data-show]').forEach(el => { el.hidden = !el.dataset.show.split(' ').some(t => show[t]); });
@@ -339,8 +346,9 @@
       ': tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.';
     const head = '<thead><tr><th class="left">Bolt</th><th>x (mm)</th><th>y (mm)</th><th>Tension F<sub>A</sub> (kN)</th>' + (FX ? '<th>Rigid model (kN)</th>' : '') + '<th>Shear F<sub>Q</sub> (kN)</th></tr></thead>';
     const rows = P.bolts.map(b => `<tr class="${b === P.critA && P.FAmax > 0 ? 'hl' : ''}"><td class="left">${b.i}${b === P.critA && P.FAmax > 0 ? ' <span class="badge">max tension</span>' : ''}${b === P.critQ && P.FQmax > 0 ? ' <span class="badge">max shear</span>' : ''}</td>` +
-      `<td>${f(b.x, 1)}</td><td>${f(b.y, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td>${FX ? `<td>${f(b.FArigid / 1000, 3)}</td>` : ''}<td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
+      `<td>${f(b.xu, 1)}</td><td>${f(b.yu, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td>${FX ? `<td>${f(b.FArigid / 1000, 3)}</td>` : ''}<td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
     $('#pat-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
+    $('#pat-pts-info').innerHTML = P.custom ? P.n + ' bolts read' + (P.bad.length ? ', line ' + P.bad.join(', ') + ' ignored' : '') + '. Centroid C at (' + f(P.cx0, 1) + ', ' + f(P.cy0, 1) + ') mm.' : '';
     $('#pat-flex').hidden = !FX;
     if (FX) {
       $('#pat-flex-view').innerHTML = DR.flexView(r);
@@ -401,9 +409,12 @@
     if (PT) {
       const cb = PT.critA, mm = x => N(x / 1000, 0);
       const rows = [
-        ['Σx² , Σy² , Σr² = Σ(x² + y²)', PT.n + ' bolts', N(PT.Sx2, 0) + ', ' + N(PT.Sy2, 0) + ', ' + N(PT.Sr2, 0) + ' mm²'],
+        ['Σx² , Σy² , Σr² = Σ(x² + y²)' + (PT.custom ? ', Σxy' : ''), PT.n + ' bolts' + (PT.custom ? ', x, y from the centroid C' : ''), N(PT.Sx2, 0) + ', ' + N(PT.Sy2, 0) + ', ' + N(PT.Sr2, 0) + (PT.custom ? ', ' + N(PT.Sxy, 0) : '') + ' mm²'],
         PT.method === 'heel'
           ? ['F<sub>A,i</sub> = F<sub>z</sub>/n + M·h<sub>i</sub>/Σh² (heel at ' + N(PT.c, 1) + ' mm from the centre)', 'bolt ' + cb.i + ': ' + kN(PT.Fz) + '/' + PT.n + ' + ' + mm(PT.Mb) + ' N·m·' + N(cb.h, 1) + '/' + N(PT.Sh2, 0), kN(cb.FA)]
+          : (Math.abs(PT.Sxy) > 1e-9 * PT.Sr2 || PT.lineDir)
+            ? ['F<sub>A,i</sub> = F<sub>z</sub>/n + b·x<sub>i</sub> + c·y<sub>i</sub>, with Σx²·b + Σxy·c = −M<sub>y</sub>, Σxy·b + Σy²·c = M<sub>x</sub>' + (PT.lineDir ? ' (bolts on one line: moment along the line only)' : ''),
+              'b = ' + sci(PT.bx) + ', c = ' + sci(PT.cy) + ' N/mm; bolt ' + cb.i + ': ' + kN(PT.Fz) + '/' + PT.n + ' + b·' + N(cb.x, 1) + ' + c·' + N(cb.y, 1), kN(cb.FA)]
           : ['F<sub>A,i</sub> = F<sub>z</sub>/n + M<sub>x</sub>·y<sub>i</sub>/Σy² − M<sub>y</sub>·x<sub>i</sub>/Σx²', 'bolt ' + cb.i + ': ' + kN(PT.Fz) + '/' + PT.n + ' + ' + mm(PT.Mx) + '·' + N(cb.y, 1) + '/' + N(PT.Sy2, 0) + ' − ' + mm(PT.My) + '·' + N(cb.x, 1) + '/' + N(PT.Sx2, 0) + ' (N·m, mm)', kN(cb.FA)],
         ['F<sub>Q,i</sub> = |(F<sub>x</sub>/n − M<sub>z</sub>·y<sub>i</sub>/Σr², F<sub>y</sub>/n + M<sub>z</sub>·x<sub>i</sub>/Σr²)|', 'bolt ' + PT.critQ.i, kN(PT.FQmax)],
         ['F<sub>A,max</sub>, F<sub>A,min</sub> = R·F<sub>A,max</sub>, F<sub>Q</sub> → single-bolt check', 'R = ' + N(PT.ratio, 2), kN(PT.FAmax) + ', ' + kN(PT.ratio * PT.FAmax) + ', ' + kN(PT.FQmax)],
@@ -417,6 +428,7 @@
           ['F<sub>A,i</sub> = R<sub>col</sub>/n<sub>col</sub> + M<sub>x</sub>·y<sub>i</sub>/Σy²', 'bolt ' + cb.i + ': ' + kN(cc.R) + '/' + cc.idx.length + ' + ' + mm(PT.Mx) + '·' + N(cb.y, 1) + '/' + N(PT.Sy2, 0), kN(cb.FA) + ' (rigid ' + kN(cb.FArigid) + ')'],
           ['σ = M<sub>max</sub> / (L<sub>y</sub>·t²/6)', N(FX.Mmax / 1000, 1) + ' N·m at x = ' + N(FX.xM, 1) + ' mm', N(FX.sig, 0) + ' MPa']);
       }
+      if (PT.custom && !PT.flex) rows.splice(1, 0, ['Centroid C = mean of the bolt positions; F<sub>z</sub> offset → M<sub>x</sub> += F<sub>z</sub>·y<sub>F</sub>, M<sub>y</sub> −= F<sub>z</sub>·x<sub>F</sub> (from C)', 'x<sub>F</sub>, y<sub>F</sub> = ' + N(PT.xF, 1) + ', ' + N(PT.yF, 1) + ' mm', '(' + N(PT.cx0, 1) + ', ' + N(PT.cy0, 1) + ') mm']);
       step('Pattern', 'Bolt pattern load distribution (' + (PT.flex ? 'flexible flange' : 'rigid flange') + ')', rows, PT.flex
         ? 'Flexible flange: the flange is an Euler–Bernoulli beam along x on one spring per bolt column; the base is rigid and the joint must stay closed. Along y the flange is taken as rigid.'
         : PT.method === 'heel'

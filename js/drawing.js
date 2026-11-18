@@ -410,17 +410,33 @@
     if (!P) return '';
     const id = 'pv' + (++uid);
     const VW = 460, VH = 380, cx = 200, cy = 190, half = 150;
-    const rect = inp.patType === 'rect';
-    const fl = rect ? { w: +inp.patLx || 0, h: +inp.patLy || 0 } : { d: +inp.patDf || 0 };
-    const ext = Math.max(rect ? Math.max(fl.w, fl.h) / 2 : fl.d / 2, ...P.bolts.map(b => Math.hypot(b.x, b.y) + r.dW / 2), 1);
+    const rect = inp.patType === 'rect', custom = P.custom;
+    const fl = rect ? { w: +inp.patLx || 0, h: +inp.patLy || 0 } : custom ? {} : { d: +inp.patDf || 0 };
+    const ext = Math.max(rect ? Math.max(fl.w, fl.h) / 2 : custom ? 0 : fl.d / 2, ...P.bolts.map(b => Math.hypot(b.x, b.y) + r.dW / 2), 1);
     const sc = half / ext;
     const X = x => cx + x * sc, Y = y => cy - y * sc;
     const out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Bolt pattern with the load on each bolt">${hatchDefs(id)}
       <defs><marker id="${id}-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 1L10 5L0 9z" class="pat-shear-head"/></marker></defs>`];
     // flange outline
     if (rect && fl.w > 0 && fl.h > 0) out.push(`<rect x="${r1(X(-fl.w / 2))}" y="${r1(Y(fl.h / 2))}" width="${r1(fl.w * sc)}" height="${r1(fl.h * sc)}" rx="4" class="pat-flange"/>`);
-    else if (!rect && fl.d > 0) out.push(`<circle cx="${cx}" cy="${cy}" r="${r1(fl.d / 2 * sc)}" class="pat-flange"/>`);
-    if (!rect) out.push(`<circle cx="${cx}" cy="${cy}" r="${r1((+inp.patPCD || 0) / 2 * sc)}" class="guide" fill="none"/>`);
+    else if (!rect && !custom && fl.d > 0) out.push(`<circle cx="${cx}" cy="${cy}" r="${r1(fl.d / 2 * sc)}" class="pat-flange"/>`);
+    if (custom && P.n >= 3) {
+      // convex hull of the bolts (monotone chain) as a guide, centroid C and the user's origin
+      const ps = P.bolts.map(b => [b.x, b.y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+      const lo = [], hi = [];
+      ps.forEach(p => { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); });
+      ps.slice().reverse().forEach(p => { while (hi.length > 1 && cr(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); });
+      const hull = lo.slice(0, -1).concat(hi.slice(0, -1));
+      if (hull.length >= 3) out.push(`<polygon points="${hull.map(p => r1(X(p[0])) + ',' + r1(Y(p[1]))).join(' ')}" class="pat-flange" style="fill-opacity:.35"/>`);
+    }
+    if (custom) {
+      out.push(`<path d="M${cx - 6},${cy} h12 M${cx},${cy - 6} v12" class="pat-axis" style="stroke-dasharray:none"/><text x="${cx + 7}" y="${cy + 14}" class="pat-axis-text">C</text>`);
+      const ox = X(-P.cx0), oy = Y(-P.cy0);
+      const onBolt = P.bolts.some(b => Math.hypot(X(b.x) - ox, Y(b.y) - oy) < Math.max(7, r.dW / 2 * sc) + 2);
+      if (!onBolt && Math.hypot(P.cx0, P.cy0) > 1e-6 && ox > 0 && ox < VW && oy > 0 && oy < VH) out.push(`<circle cx="${r1(ox)}" cy="${r1(oy)}" r="3" class="pat-axis" style="stroke-dasharray:none"/><text x="${r1(ox + 6)}" y="${r1(oy - 5)}" class="pat-axis-text">0, 0</text>`);
+    }
+    if (!rect && !custom) out.push(`<circle cx="${cx}" cy="${cy}" r="${r1((+inp.patPCD || 0) / 2 * sc)}" class="guide" fill="none"/>`);
     // bending axis: neutral axis through the centroid, or the heel line at the flange edge
     if (P.Mb > 0) {
       let v = { x: -P.u.y, y: P.u.x };
@@ -449,6 +465,11 @@
       const anchor = Math.cos(ang) > 0.3 ? 'start' : Math.cos(ang) < -0.3 ? 'end' : 'middle';
       out.push(`<text x="${r1(tx)}" y="${r1(ty + 4)}" text-anchor="${anchor}" class="pat-val${crit ? ' crit' : ''}">${f(b.FA / 1000, 2)}</text>`);
     });
+    // point of action of an off-centre axial load
+    if (P.Fz && Math.hypot(P.xF, P.yF) > 1e-6) {
+      const fx = X(P.xF), fy = Y(P.yF);
+      out.push(`<circle cx="${r1(fx)}" cy="${r1(fy)}" r="6" class="force" style="fill:none"/><circle cx="${r1(fx)}" cy="${r1(fy)}" r="1.8" class="force-head"/><text x="${r1(fx + 9)}" y="${r1(fy + 4)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">z</tspan></text>`);
+    }
     // axes and legend
     out.push(`<line x1="24" y1="${VH - 24}" x2="58" y2="${VH - 24}" class="dim" marker-end="url(#${id}-arr)"/><text x="62" y="${VH - 20}" class="lbl">x</text>`);
     out.push(`<line x1="24" y1="${VH - 24}" x2="24" y2="${VH - 58}" class="dim" marker-end="url(#${id}-arr)"/><text x="20" y="${VH - 62}" class="lbl">y</text>`);

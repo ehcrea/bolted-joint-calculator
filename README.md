@@ -18,7 +18,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Surface pressure** under the head, nut and washers against the limiting pressure p<sub>G</sub> of each material
 - **Thread stripping and engagement length** for a nut, a tapped hole, a **Heli-Coil** (wire thread insert, STI hole) or a **solid threaded insert**: strength of each thread against the bolt breaking load and the engagement length needed for the bolt to break first
 - **Bolt length** from clamp length and engagement, rounded to a standard length
-- **Bolt patterns**: circular or rectangular patterns with forces and moments on the flange; rigid-flange load distribution (centroid model for closed joints, heel model for opened joints) or a **flexible flange** (beam on elastic bolt supports with the VDI 2230 joint stiffness, compared with the rigid result, flange bending check), off-centre axial load, plan view with the tension and shear on each bolt, and the most loaded bolt checked with all the methods above
+- **Bolt patterns**: circular, rectangular or **custom bolt positions** (pasted x, y list from any origin, general Σxy solution for unsymmetric patterns) with forces and moments on the flange; rigid-flange load distribution (centroid model for closed joints, heel model for opened joints) or a **flexible flange** (beam on elastic bolt supports with the VDI 2230 joint stiffness, compared with the rigid result, flange bending check), off-centre axial load, plan view with the tension and shear on each bolt, and the most loaded bolt checked with all the methods above
 - **Eccentric clamping and loading** (VDI 2230 Part 1, joint closed): load factor Φ<sub>en</sub>* from the bending resilience of the parts, clamp load F<sub>KA</sub> against one-sided opening, and the bolt bending factor on the alternating stress; bending inertia estimated or entered
 - **Prying** of T-stub and angle flanges: Douty & McGuire prying ratio, prying force added to the bolt load, flange bending checks at the web face and the bolt line
 - **Aerospace check (NASA-STD-5020)**, optional: preload range from the torque range and the preload uncertainty Γ, relaxation, running torque of locking features, factors of safety and fitting factor, and margins of safety for separation, slip, yield, ultimate tension, thread shear-out, bolt shear and tension–shear interaction
@@ -35,7 +35,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 
 ## Examples
 
-23 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
+24 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
 
 ## Libraries
 
@@ -91,7 +91,7 @@ The tests check the stress areas against ISO 898-1, the permissible preload agai
 ## Roadmap
 
 - Translations (DE, NL, TR, ES) and inch units / UNC-UNF threads, like the other ehcrea tools
-- Opened eccentric joints, plastic T-stub models (EN 1993-1-8, AISC), plate (2-D) flanges and flexible bases, custom bolt positions
+- Opened eccentric joints, plastic T-stub models (EN 1993-1-8, AISC), plate (2-D) flanges and flexible bases, bolts of different sizes in one pattern
 - Per-layer cone model, countersunk and flange heads, reduced-shank (waisted) bolts
 - Heat-set and press-in inserts for plastics and 3D prints, self-tapping screws in plastics
 - PDF report, unit converter, SEO language pages and social image
