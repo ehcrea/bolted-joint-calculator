@@ -155,6 +155,39 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(m2.valid && m2.issues.some(i => /no size for M2/.test(i.text)), 'missing lock washer size is reported, not fatal');
 }
 
+// ---- NASA-STD-5020 check ----
+{
+  const off = C.calculate(stateFrom({}));
+  ok(off.nasa === null, 'NASA check off by default');
+  const r = C.calculate(stateFrom({ nasa: true, lock: 'wedge' }));
+  const N = r.nasa;
+  ok(N && N.margins.length >= 4, 'NASA margins computed');
+  near(N.Gamma, 0.25, 1e-9, 'Gamma auto 0.25 for oiled steel');
+  ok(C.calculate(stateFrom({ nasa: true, friction: 'zn-dry' })).nasa.Gamma === 0.35, 'Gamma auto 0.35 for dry');
+  ok(C.calculate(stateFrom({ nasa: true, nGamma: 0.1 })).nasa.Gamma === 0.1, 'Gamma user value');
+  // preload range: (1 ± Γ)·T(1 ± tol) / (K d)
+  near(N.Ppimax / N.Ppimin, (1.25 * 1.1) / (0.75 * 0.9), 1e-9, 'preload range ratio from Γ and torque tolerance');
+  ok(N.Ppmin <= N.Ppimin - r.FZ + 1e-6, 'service preload includes at least the VDI embedding loss');
+  // margins follow their definitions
+  const sep = N.margins.find(m => m.key === 'sep');
+  near(sep.MS, N.Ppmin / (1.2 * r.FAmax * (1 - r.Phi)) - 1, 1e-9, 'separation MS definition');
+  const y = N.margins.find(m => m.key === 'yield');
+  near(y.MS, r.bc.Rp * r.g.As / (N.Ppmax + r.Phi * 1.15 * 1.25 * r.FAmax) - 1, 1e-9, 'yield MS definition');
+  const u = N.margins.find(m => m.key === 'ult');
+  near(u.MS, r.bc.Rm * r.g.As / (1.15 * 1.4 * r.FAmax) - 1, 1e-9, 'ultimate MS definition');
+  ok(N.margins.some(m => m.key === 'slip') && N.margins.some(m => m.key === 'inter'), 'slip and interaction checked with a transverse load');
+  // higher preload: separation margin up, yield margin down
+  const hi = C.calculate(stateFrom({ nasa: true, lock: 'wedge', nu: 0.6 })).nasa, lo = C.calculate(stateFrom({ nasa: true, lock: 'wedge', nu: 0.4 })).nasa;
+  ok(hi.margins[0].MS > lo.margins[0].MS && hi.margins[1].MS < lo.margins[1].MS, 'preload trades separation margin against yield margin');
+  // running torque: subtracted unless the torque is specified above it
+  const tpv = C.calculate(stateFrom({ nasa: true, nTpvMin: 2, nTpvMax: 5 })).nasa;
+  const tpvAdded = C.calculate(stateFrom({ nasa: true, nTpvMin: 2, nTpvMax: 5, nTpvAdded: true })).nasa;
+  ok(tpv.Ppimin < tpvAdded.Ppimin && tpv.locked, 'running torque lowers the preload unless excluded; counts as locking');
+  ok(r.issues.every(i => !/need a locking feature/.test(i.text)) && C.calculate(stateFrom({ nasa: true })).issues.some(i => /need a locking feature/.test(i.text)), 'locking feature required');
+  const neg = C.calculate(stateFrom({ nasa: true, lock: 'wedge', FAmax: 60, FQ: 0 }));
+  ok(neg.status === 'error' && neg.issues.some(i => /negative margin/.test(i.text)), 'negative margin is an error');
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

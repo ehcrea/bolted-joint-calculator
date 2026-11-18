@@ -71,7 +71,9 @@
     $('#preset').addEventListener('change', e => {
       const p = PR.PRESETS.find(x => x.id === e.target.value);
       if (!p) return;
-      state = Object.assign(clone(PR.DEFAULT), clone(p.s));
+      // keep the aerospace check settings (section 6) when switching examples
+      const keepNasa = Object.fromEntries(Object.keys(PR.DEFAULT).filter(k => /^n[A-Z]|^nasa$/.test(k)).map(k => [k, state[k]]));
+      state = Object.assign(clone(PR.DEFAULT), clone(p.s), keepNasa);
       e.target.value = '';
       update();
       toast('Loaded: ' + p.label);
@@ -151,6 +153,7 @@
       esv, 'engage-input': state.joint === 'tapped' || state.joint === 'insert',
       helicoil: state.joint === 'helicoil', insert: state.joint === 'insert',
       'mode-nu': state.mode !== 'torque', 'mode-torque': state.mode === 'torque',
+      nasa: !!state.nasa,
     };
     $$('[data-show]').forEach(el => { el.hidden = !el.dataset.show.split(' ').some(t => show[t]); });
     $('#engage-title').textContent = { tapped: 'Tapped part', helicoil: 'Heli-Coil (wire thread insert)', insert: 'Solid threaded insert' }[state.joint] || '';
@@ -209,6 +212,7 @@
       setChip('error');
       renderIssues(r.issues);
       ['#section', '#diagram', '#thread-detail', '#friction-chart', '#torque-bar', '#steps', '#checks', '#strip', '#diag-metrics', '#thread-metrics'].forEach(s => { $(s).innerHTML = ''; });
+      $('#nasa-card').hidden = true;
       return;
     }
     hero.classList.remove('invalid');
@@ -247,6 +251,7 @@
     $('#friction-chart').innerHTML = DR.frictionChart(r);
     $('#torque-bar').innerHTML = DR.torqueBar(r);
     renderChecks(r);
+    renderNasa(r);
     renderStrip(r);
     $('#steps').innerHTML = steps(r);
   }
@@ -277,6 +282,30 @@
     const head = '<thead><tr><th class="left">Step</th><th class="left">Check</th><th>Value</th><th>Limit</th><th>Safety</th><th>Status</th></tr></thead>';
     const rows = r.checks.map(c => `<tr><td class="left">${c.id}</td><td class="left">${c.label}</td><td class="strong">${fmtVal(c.value, c.unit)}</td><td>${c.limit}</td><td>${c.safety !== undefined ? f(c.safety, 2) : ''}</td><td><span class="status ${c.status}">${{ ok: '✓ OK', warn: '! Check', error: '✕ Fail' }[c.status]}</span></td></tr>`).join('');
     $('#checks').innerHTML = head + '<tbody>' + rows + '</tbody>';
+  }
+  function renderNasa(r) {
+    const card = $('#nasa-card'), N = r.nasa;
+    card.hidden = !N;
+    if (!N) return;
+    const kN = x => f(x / 1000, 2);
+    $('#nasa-metrics').innerHTML = metrics([
+      ['Nut factor K', f(N.K, 3), 'at mean friction'],
+      ['Preload uncertainty Γ', '±' + f(N.Gamma * 100, 0) + ' %', N.Gamma === N.GammaAuto ? 'auto: ' + (N.dry ? 'dry / thread-locker' : 'lubricated') : 'user value'],
+      ['Torque range', f(N.Tmin / 1000, 2) + '–' + f(N.Tmax / 1000, 2) + ' N·m', '± ' + f(N.tol * 100, 0) + ' % on M<sub>A</sub>'],
+      ['Initial preload P<sub>pi</sub>', kN(N.Ppimin) + '–' + kN(N.Ppimax) + ' kN', N.TpvMax > 0 ? (N.tpvAdded ? 'running torque already excluded' : 'running torque subtracted') : ''],
+      ['Service preload P<sub>p</sub>', '<span class="' + (N.Ppmin <= 0 ? 'status error' : '') + '">' + kN(N.Ppmin) + '</span>–' + kN(N.Ppmax) + ' kN', 'relaxation ' + kN(N.Prelax) + ' kN' + (N.relaxFromVDI ? ' (VDI embedding)' : ' (' + f(N.relax * 100, 0) + ' %)')],
+      ['Load factor nφ', f(N.nphi, 3), 'from the VDI 2230 stiffness'],
+    ]);
+    const head = '<thead><tr><th class="left">Check</th><th>Allowable</th><th>Factored load</th><th>MS</th><th>Status</th></tr></thead>';
+    const fmtF = (x, k) => k === 'inter' ? f(x, 3) : (isFinite(x) ? kN(x) + ' kN' : '—');
+    const rows = N.margins.map(m => {
+      const st = m.MS < 0 ? 'error' : 'ok';
+      return `<tr><td class="left">${m.label}<div class="hint">${m.formula}</div></td><td>${fmtF(m.allow, m.key)}</td><td>${fmtF(m.load, m.key)}</td>` +
+        `<td class="strong">${isFinite(m.MS) ? f(m.MS, 2) : '∞'}</td><td><span class="status ${st}">${st === 'ok' ? '✓ MS ≥ 0' : '✕ MS < 0'}</span></td></tr>`;
+    }).join('');
+    $('#nasa-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
+    $('#nasa-badge').textContent = 'lowest MS ' + (isFinite(N.worstMS) ? f(N.worstMS, 2) : '∞');
+    $('#nasa-badge').className = 'badge ' + (N.worstMS < 0 ? 'bad' : '');
   }
   function fmtVal(v, u) { return (isFinite(v) ? f(v, u === '%' ? 0 : (Math.abs(v) < 10 ? 2 : 1)) : '∞') + (u ? ' ' + u : ''); }
 
@@ -380,6 +409,20 @@
     s.modes.forEach(m => stripRows.push(['F = τ<sub>B</sub>·A<sub>SG</sub>·C<sub>3</sub>: ' + m.label, N(m.tau, 0) + '·' + N(m.A, 0) + '·0.9' + (m.key === 'nut' ? '·C<sub>1</sub>' : ''), kN(m.F)]));
     stripRows.push(['F<sub>B</sub> = A<sub>S</sub>·R<sub>m</sub> (bolt breaks)', N(g.As, 1) + '·' + N(r.bc.Rm, 0), kN(s.Fbreak)]);
     step('Thread', 'Thread stripping', stripRows, 'The joint should fail by bolt fracture (visible, ductile), not by stripping: weakest thread ≥ F<sub>B</sub>.');
+    const NS = r.nasa;
+    if (NS) {
+      const sub = NS.tpvAdded ? '' : ' − T<sub>pv</sub>';
+      step('NASA', 'NASA-STD-5020 preload and margins of safety', [
+        ['K = M<sub>A</sub>(μ<sub>mean</sub>) / (F·d)', 'nominal nut factor at the mean friction', N(NS.K, 3)],
+        ['T<sub>max</sub>, T<sub>min</sub> = M<sub>A</sub>·(1 ± tol)', N(NS.Tnom / 1000, 2) + '·(1 ± ' + N(NS.tol, 2) + ')', N(NS.Tmax / 1000, 2) + ', ' + N(NS.Tmin / 1000, 2) + ' N·m'],
+        ['P<sub>pi,max</sub> = (1 + Γ)·(T<sub>max</sub>' + sub + '<sub>,min</sub>) / (K·d)', '(1 + ' + N(NS.Gamma, 2) + ')·(' + N(NS.Tmax / 1000, 3) + (NS.tpvAdded ? '' : ' − ' + N(NS.TpvMin / 1000, 3)) + ') / (' + N(NS.K, 3) + '·' + N(g.d) + ')', kN(NS.Ppimax)],
+        ['P<sub>pi,min</sub> = (1 − Γ)·(T<sub>min</sub>' + sub + '<sub>,max</sub>) / (K·d)', '(1 − ' + N(NS.Gamma, 2) + ')·(' + N(NS.Tmin / 1000, 3) + (NS.tpvAdded ? '' : ' − ' + N(NS.TpvMax / 1000, 3)) + ') / (' + N(NS.K, 3) + '·' + N(g.d) + ')', kN(NS.Ppimin)],
+        ['P<sub>relax</sub> = max(relax·P<sub>pi,min</sub>, F<sub>Z</sub>)', 'max(' + kN(NS.relax * NS.Ppimin) + ', ' + kN(r.FZ) + ')', kN(NS.Prelax)],
+        ['P<sub>p,max</sub> = P<sub>pi,max</sub> + ΔP<sub>T+</sub>', kN(NS.Ppimax) + ' + ' + kN(r.thGain), kN(NS.Ppmax)],
+        ['P<sub>p,min</sub> = P<sub>pi,min</sub> − P<sub>relax</sub> − ΔP<sub>T−</sub>', kN(NS.Ppimin) + ' − ' + kN(NS.Prelax) + ' − ' + kN(r.thLoss), kN(NS.Ppmin)],
+      ].concat(NS.margins.map(m => ['MS ' + m.label.toLowerCase() + ' = ' + m.formula + ' − 1', (m.key === 'inter' ? N(m.allow, 0) + ' / ' + N(m.load, 3) : kN(m.allow) + ' / ' + kN(m.load)), isFinite(m.MS) ? N(m.MS, 2) : '∞'])),
+      'FS<sub>y</sub> = ' + N(NS.FSy, 2) + ', FS<sub>u</sub> = ' + N(NS.FSu, 2) + ', FS<sub>sep</sub> = ' + N(NS.FSsep, 2) + ', FS<sub>slip</sub> = ' + N(NS.FSslip, 2) + ', FF = ' + N(NS.FF, 2) + '; P<sub>t</sub> = ' + kN(NS.Pt) + ', P<sub>s</sub> = ' + kN(NS.Ps) + ' (limit loads per bolt). Margins of safety must be ≥ 0.');
+    }
     return S.join('');
   }
 

@@ -416,6 +416,62 @@
     if (lKd < 1) add('warn', 'Very short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 1): the bolt stretches little, so embedding costs ' + fzShare + ' % of the minimum preload. Use a longer bolt with a spacer sleeve or a stiff washer stack to reach l<sub>K</sub>/d ≥ 3.');
     else if (lKd < 3) add('info', 'Short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 3): embedding costs ' + fzShare + ' % of the minimum preload. A longer bolt with a spacer sleeve (l<sub>K</sub>/d ≥ 3) makes the preload less sensitive to settling and vibration.');
     if (lK / d > 10) add('warn', 'Very long clamp length (l<sub>K</sub>/d > 10): the cone model and the resilience formulas lose accuracy.');
+    // ---- NASA-STD-5020 style check (optional) ----
+    const nasa = inp.nasa ? nasaCheck() : null;
+    function nasaCheck() {
+      const num = (v, def) => (v === '' || v === null || v === undefined || !isFinite(+v)) ? def : +v;
+      const dry = fr.custom || fr.dry || fr.locker;
+      const GammaAuto = dry ? 0.35 : 0.25;
+      const Gamma = num(inp.nGamma, 0) > 0 ? +inp.nGamma : GammaAuto;
+      const tol = Math.max(0, num(inp.nTtol, 10)) / 100;
+      const relax = Math.max(0, num(inp.nRelax, 5)) / 100;
+      const TpvMin = Math.max(0, num(inp.nTpvMin, 0)) * 1000, TpvMax = Math.max(TpvMin, num(inp.nTpvMax, 0) * 1000);
+      const FSy = num(inp.nFSy, 1.25), FSu = num(inp.nFSu, 1.4), FSsep = num(inp.nFSsep, 1.2), FSslip = num(inp.nFSslip, 1.2), FF = num(inp.nFF, 1.15);
+      // nominal nut factor K = T / (F·d) at the mean friction coefficients
+      const K = torqueK(g, (muGmin + muGmax) / 2, (muKmin + muKmax) / 2, DKm) / d;
+      const Tnom = MA, Tmax = Tnom * (1 + tol), Tmin = Tnom * (1 - tol);
+      // Prevailing (running) torque of a locking feature does not create preload. If the torque is specified
+      // above the measured running torque, it is already excluded; otherwise subtract it (min / max crossed).
+      const tpvAdded = !!inp.nTpvAdded;
+      const Ppimax = (1 + Gamma) * Math.max(0, Tmax - (tpvAdded ? 0 : TpvMin)) / (K * d);
+      const Ppimin = (1 - Gamma) * Math.max(0, Tmin - (tpvAdded ? 0 : TpvMax)) / (K * d);
+      const Prelax = Math.max(relax * Ppimin, FZ);          // short-term relaxation, at least the VDI 2230 embedding
+      const Ppmax = Ppimax + thGain;
+      const Ppmin = Ppimin - Prelax - thLoss;
+      const Pt = FAmax, Ps = FQ, nphi = Phi;
+      const Pty = bc.Rp * g.As, Ptu = bc.Rm * g.As;
+      const Psu = 0.6 * bc.Rm * g.Ad3;                      // threads in the shear plane (conservative)
+      const Fstrip = strip.weakest ? strip.weakest.F : Infinity;
+      const ms = (allow, load) => load > 0 ? allow / load - 1 : Infinity;
+      const margins = [];
+      const m = (key, label, allow, load, formula) => margins.push({ key, label, allow, load, MS: ms(allow, load), formula });
+      m('sep', 'Separation', Math.max(0, Ppmin), FSsep * Pt * (1 - nphi), 'P<sub>p,min</sub> / (FS<sub>sep</sub>·P<sub>t</sub>·(1 − nφ))');
+      m('yield', 'Bolt tension, yield', Pty, Ppmax + nphi * FF * FSy * Pt, 'A<sub>S</sub>·R<sub>p0.2</sub> / (P<sub>p,max</sub> + nφ·FF·FS<sub>y</sub>·P<sub>t</sub>)');
+      m('ult', 'Bolt tension, ultimate', Ptu, FF * FSu * Pt, 'A<sub>S</sub>·R<sub>m</sub> / (FF·FS<sub>u</sub>·P<sub>t</sub>), preload neglected (ductile fastener)');
+      m('strip', 'Thread shear-out, ultimate', Fstrip, FF * FSu * Pt, 'F<sub>strip,min</sub> / (FF·FS<sub>u</sub>·P<sub>t</sub>)');
+      if (Ps > 0) {
+        const avail = muT * qF * Math.max(0, Ppmin - (1 - nphi) * FSslip * Pt);
+        m('slip', 'Slip', avail, FSslip * Ps, 'μ<sub>T</sub>·q<sub>F</sub>·(P<sub>p,min</sub> − (1 − nφ)·FS<sub>slip</sub>·P<sub>t</sub>) / (FS<sub>slip</sub>·P<sub>s</sub>)');
+        m('shear', 'Bolt shear, ultimate', Psu, FF * FSu * Ps, '0.6·R<sub>m</sub>·A<sub>d3</sub> / (FF·FS<sub>u</sub>·P<sub>s</sub>), threads in the shear plane');
+        if (Pt > 0) {
+          const Rt = FF * FSu * Pt / Ptu, Rs = FF * FSu * Ps / Psu;
+          margins.push({ key: 'inter', label: 'Tension + shear interaction, ultimate', allow: 1, load: Math.hypot(Rt, Rs), MS: 1 / Math.hypot(Rt, Rs) - 1, formula: '1 / √(R<sub>t</sub>² + R<sub>s</sub>²) (elliptical interaction)', Rt, Rs });
+        }
+      }
+      const locked = (lock && lock.key !== 'split') || lockKey === 'locker' || fr.locker || TpvMax > 0;
+      return { Gamma, GammaAuto, dry: !!dry, tol, relax, TpvMin, TpvMax, tpvAdded, FSy, FSu, FSsep, FSslip, FF, K, Tnom, Tmax, Tmin,
+        Ppimax, Ppimin, Prelax, relaxFromVDI: FZ > relax * Ppimin, Ppmax, Ppmin, Pt, Ps, nphi, Pty, Ptu, Psu, Fstrip, margins, locked,
+        worstMS: Math.min(...margins.map(x => x.MS)) };
+    }
+    if (nasa) {
+      const neg = nasa.margins.filter(x => x.MS < 0);
+      if (neg.length) add('error', 'NASA-STD-5020 check: negative margin of safety for ' + neg.map(x => x.label.toLowerCase() + ' (MS = ' + fmtN(x.MS, 2) + ')').join(', ') + '.');
+      if (nasa.margins.find(x => x.key === 'yield').MS < 0 && nasa.Ppmax > 0.75 * nasa.Pty) add('info', 'With the preload uncertainty Γ = ±' + fmtN(nasa.Gamma * 100, 0) + ' % the maximum preload reaches ' + fmtN(nasa.Ppmax / nasa.Pty * 100, 0) + ' % of the bolt yield load. Aerospace joints are usually tightened to a lower nominal preload (often 50–75 % of yield), or the preload is measured to reduce Γ.');
+      if (!nasa.locked) add('warn', 'NASA-STD-5020: fasteners in safety-critical joints need a locking feature (e.g. a prevailing-torque nut or insert, with its running torque measured at installation). Enter the prevailing torque or choose a locking element.');
+      if (lock && lock.key === 'split') add('warn', 'NASA-STD-5020: a split lock washer is not a locking feature.');
+      if (lockKey === 'locker' || fr.locker) add('info', 'NASA-STD-5020: liquid locking compound as the only locking feature needs approval and verification in most programmes; check your requirements.');
+    }
+
     // ---- locking elements ----
     const fzLockUm = lock ? (1 + nLockExtra) * ev[2] : 0;
     if (lock && lock.key === 'split') add('warn', 'Split lock washers (DIN 127, withdrawn in 2003) do not secure a preloaded joint: they are pressed flat far below the preload and then only add contact faces that settle, here about ' + fmtN(fzLockUm, 1) + ' µm more embedding. VDI 2230 Part 1 advises against them (Junker vibration test, DIN 65151). Use enough preload, a thread-locker or a wedge-locking washer pair instead.');
@@ -446,7 +502,7 @@
       thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
       res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, dC, springAlways, deltaS0, deltaS, deltaP, pr },
-      lock, lockKey, lockerUsed,
+      lock, lockKey, lockerUsed, nasa,
       n, PhiK, Phi,
       emb: { fZum, nThread, nBear, nInter, nLockExtra, values: ev, shear }, fZ, FZ, FZ0, springStage, dT, dFth, thLoss, thGain,
       FAmax, FAmin, FQ, muT, qF, SGreq, FKQ, FKextra, FKerf, FPA, FSA, FMerf,

@@ -18,6 +18,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Surface pressure** under the head, nut and washers against the limiting pressure p<sub>G</sub> of each material
 - **Thread stripping and engagement length** for a nut, a tapped hole, a **Heli-Coil** (wire thread insert, STI hole) or a **solid threaded insert**: strength of each thread against the bolt breaking load and the engagement length needed for the bolt to break first
 - **Bolt length** from clamp length and engagement, rounded to a standard length
+- **Aerospace check (NASA-STD-5020)**, optional: preload range from the torque range and the preload uncertainty Γ, relaxation, running torque of locking features, factors of safety and fitting factor, and margins of safety for separation, slip, yield, ultimate tension, thread shear-out, bolt shear and tension–shear interaction
 - **Locking elements** under the head: split lock washer (DIN 127, flagged as ineffective), conical spring washer (DIN 6796, modelled as a spring that recovers settling once below its flat load), wedge-locking washer pair (DIN 25201), and thread-locking adhesive with its own friction ranges
 - **Clamp length ratio** l<sub>K</sub>/d with the share of preload lost to settling: a note below 3 (the common design rule, e.g. in semiconductor equipment) and a warning below 1
 
@@ -97,10 +98,11 @@ The tests check the stress areas against ISO 898-1, the permissible preload agai
 - VDI 2230 Blatt 1:2015, *Systematic calculation of highly stressed bolted joints: joints with one cylindrical bolt*
 - ISO 898-1, ISO 3506-1, ISO 261, ISO 724, ISO 273, ISO 4017, ISO 4032, ISO 4762, ISO 7089, ISO 7093-1, ISO 16047
 - DIN 8140 (wire thread inserts), FED-STD-H28/2B (thread shear areas)
+- NASA-STD-5020B, *Requirements for Threaded Fastening Systems in Spaceflight Hardware*; ECSS-E-HB-32-23A, *Threaded fasteners handbook*; NASA RP-1228, *Fastener Design Manual*
 - DIN 127 (withdrawn), DIN 6796, DIN 25201, DIN 65151 / ISO 16130 (Junker test), ISO 10964 and ASTM D5363 / MIL-S-22473 (anaerobic thread-lockers)
 - J. H. Bickford, *Introduction to the Design and Behavior of Bolted Joints*
 
-This project is not affiliated with or endorsed by VDI or any fastener manufacturer. Heli-Coil is a trademark of its owner and is used here only to name the insert type.
+This project is not affiliated with or endorsed by VDI, NASA or any fastener manufacturer. Heli-Coil is a trademark of its owner and is used here only to name the insert type.
 
 ## License
 

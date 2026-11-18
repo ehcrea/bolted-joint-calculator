@@ -281,6 +281,8 @@ label.check { height: auto; font-weight: 500; }
 .legend-key { font-size: 12px; color: var(--text-3); display: inline-flex; align-items: center; gap: 6px; }
 .legend-key .k-free { width: 14px; height: 0; border-top: 1.5px dashed var(--text-3); }
 .badge { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 8px; }
+.badge.bad { color: var(--err); background: var(--err-bg); }
+#nasa-table .hint { margin: 2px 0 0; font-size: 11px; }
 table.data td.hl, table.data tr.hl td { background: var(--accent-soft); }
 table.data tr.click { cursor: pointer; }
 table.data tr.click:hover td { background: var(--surface-2); }

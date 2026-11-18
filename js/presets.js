@@ -10,6 +10,8 @@
     friction: 'oxide-oil', muGmin: 0.12, muGmax: 0.18, muKmin: 0.10, muKmax: 0.18,
     method: 'tw-table', aA: '', mode: 'nu', nu: 0.9, MA: 60,
     FAmax: 8, FAmin: 0, FQ: 1.5, muT: 0.15, qF: 1, SGreq: 1.2, FKmin: 0, dT: 0, n: 0.5,
+    nasa: false, nGamma: '', nTtol: 10, nRelax: 5, nTpvMin: 0, nTpvMax: 0, nTpvAdded: false,
+    nFSy: 1.25, nFSu: 1.4, nFSsep: 1.2, nFSslip: 1.2, nFF: 1.15,
   };
 
   const PRESETS = [

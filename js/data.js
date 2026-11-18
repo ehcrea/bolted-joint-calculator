@@ -97,10 +97,10 @@
   // Based on VDI 2230-1 table A5 friction classes and ISO 16047 / supplier data for coatings.
   const FRICTION = {
     'oxide-oil':   { label: 'Steel, black oxide or phosphated, lightly oiled', muG: [0.12, 0.18], muK: [0.10, 0.18], cls: 'B' },
-    'zn-dry':      { label: 'Steel, electro-zinc plated, dry',                muG: [0.14, 0.24], muK: [0.12, 0.22], cls: 'C' },
+    'zn-dry':      { label: 'Steel, electro-zinc plated, dry',                muG: [0.14, 0.24], muK: [0.12, 0.22], cls: 'C', dry: true },
     'zn-flake':    { label: 'Zinc flake coating with lubricant (ISO 10683)',   muG: [0.09, 0.14], muK: [0.09, 0.14], cls: 'B' },
     'mos2':        { label: 'MoS₂ paste or solid lubricant',                  muG: [0.08, 0.12], muK: [0.08, 0.12], cls: 'A' },
-    'ss-dry':      { label: 'Stainless A2/A4, dry (galling risk)',            muG: [0.23, 0.50], muK: [0.15, 0.40], cls: 'D–E' },
+    'ss-dry':      { label: 'Stainless A2/A4, dry (galling risk)',            muG: [0.23, 0.50], muK: [0.15, 0.40], cls: 'D–E', dry: true },
     'ss-paste':    { label: 'Stainless A2/A4 with anti-seize paste',          muG: [0.10, 0.16], muK: [0.08, 0.16], cls: 'A–B' },
     'al-oil':      { label: 'Steel bolt, aluminium parts, lightly oiled',     muG: [0.12, 0.18], muK: [0.10, 0.20], cls: 'B' },
     'ti-paste':    { label: 'Titanium bolt with anti-seize paste',            muG: [0.12, 0.20], muK: [0.10, 0.18], cls: 'B', est: true },

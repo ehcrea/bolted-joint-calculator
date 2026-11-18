@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link rel="stylesheet" href="css/style.css?v=17">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -193,6 +193,25 @@
         </div>
         <datalist id="muT-list"></datalist>
       </fieldset>
+
+      <fieldset>
+        <legend><span class="step">6</span>Aerospace check</legend>
+        <label class="check"><input type="checkbox" data-key="nasa"> Also check to NASA-STD-5020 <span class="tip" tabindex="0" title="Spaceflight method for threaded fasteners: preload range from the torque range and a preload uncertainty Γ, factors of safety on the limit loads, and margins of safety MS = allowable / (factored load) − 1 ≥ 0. Uses the same joint stiffness, load factor and temperature change as the VDI 2230 calculation.">ⓘ</span></label>
+        <div class="grid2" data-show="nasa">
+          <label><span class="lt">Preload uncertainty Γ <span class="tip" tabindex="0" title="Scatter of the preload for torque-controlled tightening. Leave blank for the usual default: ±25 % lubricated, ±35 % dry (also used for thread-lockers and custom friction). Use a smaller value from torque–tension tests or when the preload is measured.">ⓘ</span></span> <span class="u">(blank = auto)</span><input type="number" step="0.01" min="0" max="0.9" data-key="nGamma" placeholder="auto"></label>
+          <label><span class="lt">Torque tolerance <span class="tip" tabindex="0" title="Installation torque range on the drawing: T = M_A·(1 ± tolerance). M_A is the torque from the main calculation.">ⓘ</span></span> <span class="u">(± %)</span><input type="number" step="1" min="0" data-key="nTtol"></label>
+          <label><span class="lt">Relaxation <span class="tip" tabindex="0" title="Short-term preload loss as a share of the minimum initial preload. The calculation uses the larger of this and the VDI 2230 embedding loss F_Z.">ⓘ</span></span> <span class="u">(%)</span><input type="number" step="1" min="0" data-key="nRelax"></label>
+          <label><span class="lt">Fitting factor FF <span class="tip" tabindex="0" title="Extra factor on the loads of joints and fittings, typically 1.15 unless the joint strength is verified by test. Set by your programme.">ⓘ</span></span><input type="number" step="0.05" min="1" data-key="nFF"></label>
+          <label><span class="lt">Running torque T<sub>pv,min</sub> <span class="tip" tabindex="0" title="Prevailing (running) torque of a locking nut or insert, measured before seating. It turns the screw without creating preload.">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" min="0" data-key="nTpvMin"></label>
+          <label><span class="lt">T<sub>pv,max</sub></span> <span class="u">(N·m)</span><input type="number" step="any" min="0" data-key="nTpvMax"></label>
+          <label><span class="lt">FS yield</span><input type="number" step="0.05" min="1" data-key="nFSy"></label>
+          <label><span class="lt">FS ultimate</span><input type="number" step="0.05" min="1" data-key="nFSu"></label>
+          <label><span class="lt">FS separation <span class="tip" tabindex="0" title="Factor of safety against joint separation, set by your programme (often 1.2, higher where separation is a catastrophic hazard).">ⓘ</span></span><input type="number" step="0.05" min="1" data-key="nFSsep"></label>
+          <label><span class="lt">FS slip</span><input type="number" step="0.05" min="1" data-key="nFSslip"></label>
+        </div>
+        <label class="check" data-show="nasa"><input type="checkbox" data-key="nTpvAdded"> Torque is specified above the measured running torque</label>
+        <p class="hint" data-show="nasa">Factors of safety and the fitting factor are programme requirements (e.g. NASA-STD-5001): the defaults are typical values. Loads in section 5 are limit loads per bolt.</p>
+      </fieldset>
     </form>
 
     <!-- ================= RESULTS ================= -->
@@ -226,6 +245,13 @@
       <div class="card">
         <div class="card-head"><h2>Design checks</h2><span class="badge">VDI 2230-1 steps</span></div>
         <div class="table-wrap"><table class="data" id="checks"></table></div>
+      </div>
+
+      <div class="card" id="nasa-card" hidden>
+        <div class="card-head"><h2>Margins of safety (NASA-STD-5020)</h2><span class="badge" id="nasa-badge"></span></div>
+        <p class="card-note">Preload range from the torque range and the uncertainty Γ, factored limit loads, MS = allowable / factored load − 1. Separation and slip use the minimum service preload, yield the maximum.</p>
+        <div class="metrics" id="nasa-metrics"></div>
+        <div class="table-wrap"><table class="data" id="nasa-table"></table></div>
       </div>
 
       <div class="grid-cards">
@@ -320,6 +346,16 @@
       <dt>Thread stripping</dt><dd>The thread flanks shear off. Good design makes the bolt break first: a longer engagement or an insert in soft materials.</dd>
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
+    <h3 id="help-nasa">Aerospace check (NASA-STD-5020)</h3>
+    <p>Spaceflight hardware for NASA follows NASA-STD-5020 (threaded fastening systems); ESA uses ECSS-E-HB-32-23A. Tick <b>Also check to NASA-STD-5020</b> in section 6 to run it next to VDI 2230 on the same joint. The main differences:</p>
+    <ul>
+      <li><b>Preload range from the torque range:</b> P<sub>pi</sub> = (1 ± Γ)·T / (K·d), with the nut factor K at the mean friction, the drawing torque tolerance, and the preload uncertainty Γ (by default ±25 % lubricated, ±35 % dry; smaller from torque–tension tests or measured preload). The running torque of a locking feature is subtracted unless the torque is specified above it.</li>
+      <li><b>Service preload:</b> minus relaxation (the larger of a percentage and the VDI 2230 embedding) and temperature effects.</li>
+      <li><b>Factored limit loads</b> with factors of safety and a fitting factor, and <b>margins of safety</b> MS = allowable / factored load − 1, which must be ≥ 0: separation and slip with the minimum preload, yield with the maximum preload, ultimate tension without preload (ductile fastener), thread shear-out, bolt shear and the tension–shear interaction.</li>
+      <li><b>Locking feature</b> required on safety-critical fasteners.</li>
+    </ul>
+    <p class="about-meta">This is a simplified implementation for design studies: the defaults are typical values, and your programme's revision of the standard, its factors of safety and its allowables (e.g. MMPDS) govern. The load factor nφ comes from the VDI 2230 stiffness model.</p>
+
     <h3 id="help-lock">Locking elements</h3>
     <p>A joint comes loose in two ways: it <b>loses preload</b> (settling, creep, temperature), or the screw <b>turns loose</b> under transverse vibration (Junker test, DIN 65151 / ISO 16130). Enough preload is the first defence against both. Locking elements help with only one of them:</p>
     <ul>
@@ -357,10 +393,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=16"></script>
-  <script src="js/calc.js?v=16"></script>
-  <script src="js/presets.js?v=16"></script>
-  <script src="js/drawing.js?v=16"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/data.js?v=17"></script>
+  <script src="js/calc.js?v=17"></script>
+  <script src="js/presets.js?v=17"></script>
+  <script src="js/drawing.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
 </body>
 </html>
