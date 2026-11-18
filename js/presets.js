@@ -14,7 +14,7 @@
     nFSy: 1.25, nFSu: 1.4, nFSsep: 1.2, nFSslip: 1.2, nFF: 1.15,
     patOn: false, patType: 'circle', patMethod: 'centroid', patN: 6, patPCD: 100, patAngle: 90, patDf: 130,
     patNx: 2, patNy: 2, patSx: 80, patSy: 60, patPerimeter: true, patLx: 110, patLy: 90,
-    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0,
+    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0, patXF: 0, patYF: 0, patFlex: false, patFt: '',
     pryOn: false, pryA: 30, pryB: 25, pryW: 60, pryT: '',
     eccOn: false, eccC: 50, eccB: 40, eccS: 0, eccA: 0, eccU: '', eccMB: 0, eccI: '',
   };
@@ -90,6 +90,12 @@
       tapMat: 'C45', engage: 12, rough: 'medium', friction: 'oxide-oil', method: 'tw-test', nu: 0.9, muT: 0.15, n: 0.5,
       patOn: true, patType: 'circle', patN: 6, patPCD: 80, patAngle: 90, patDf: 104,
       patFz: 4, patMx: 250, patMz: 150, patFx: 2, patR: 0 } },
+    { id: 'pat-strip', label: 'M8 8.8, 5 bolts in a row, 10 mm flange with a local load (flexible flange)', s: {
+      joint: 'nut', thread: 'M8', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '200HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 20 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FQ: 0, n: 0.5,
+      patOn: true, patType: 'rect', patNx: 5, patNy: 1, patSx: 60, patSy: 0, patLx: 280, patLy: 40, patPerimeter: false,
+      patFz: 12, patXF: 90, patR: 0, patFlex: true } },
     { id: 'pat-bracket', label: 'M6 8.8, 4-bolt bracket into aluminium (Heli-Coil), overhanging load', s: {
       joint: 'helicoil', thread: 'M6', cls: '8.8', head: 'shcs', washer: '7089', washerGrade: '300HV',
       plates: [{ mat: 'S235', t: 8 }], tapMat: '6061T6', hcLen: 1.5, rough: 'fine', friction: 'oxide-oil', method: 'tw-test',

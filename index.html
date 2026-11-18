@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=25">
+  <link rel="stylesheet" href="css/style.css?v=27">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -238,7 +238,7 @@
             <label data-show="pat-rect"><span class="lt">Flange size L<sub>y</sub></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patLy"></label>
           </div>
           <label class="check" data-show="pat-rect"><input type="checkbox" data-key="patPerimeter"> Bolts on the perimeter only</label>
-          <p class="hint">Loads on the whole flange, at the pattern centre. z is the bolt axis (pulling the joint apart is +); moments follow the right-hand rule.</p>
+          <p class="hint">Loads on the whole flange: F<sub>z</sub> at (x<sub>F</sub>, y<sub>F</sub>), the others at the pattern centre. z is the bolt axis (pulling the joint apart is +); moments follow the right-hand rule.</p>
           <div class="grid2">
             <label><span class="lt">F<sub>x</sub></span> <span class="u">(kN)</span><input type="number" step="any" data-key="patFx"></label>
             <label><span class="lt">M<sub>x</sub> <span class="tip" tabindex="0" title="Bending about x: a positive Mx loads the bolts on the +y side in tension.">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMx"></label>
@@ -246,7 +246,13 @@
             <label><span class="lt">M<sub>y</sub> <span class="tip" tabindex="0" title="Bending about y: a positive My loads the bolts on the −x side in tension.">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMy"></label>
             <label><span class="lt">F<sub>z</sub> (axial)</span> <span class="u">(kN)</span><input type="number" step="any" data-key="patFz"></label>
             <label><span class="lt">M<sub>z</sub> (torsion)</span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMz"></label>
+            <label><span class="lt">F<sub>z</sub> acts at x<sub>F</sub> <span class="tip" tabindex="0" title="Position of the axial load from the pattern centre. An offset adds a moment (rigid model) or loads the nearer bolts more (flexible flange).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" data-key="patXF"></label>
+            <label><span class="lt">F<sub>z</sub> acts at y<sub>F</sub></span> <span class="u">(mm)</span><input type="number" step="any" data-key="patYF"></label>
             <label><span class="lt">Load ratio min/max <span class="tip" tabindex="0" title="For fatigue: the minimum of the load cycle as a share of the maximum (0 = pulsating, 1 = static).">ⓘ</span></span><input type="number" step="0.1" min="0" max="1" data-key="patR"></label>
+          </div>
+          <label class="check" data-show="pat-rect"><input type="checkbox" data-key="patFlex"> Flexible flange (beam on elastic bolt supports) <span class="tip" tabindex="0" title="The flange bends between the bolts, so the bolts near a local load carry more than the rigid model says. The flange is a beam along x (width L_y, thickness t) on springs, one per bolt column, with the stiffness of the closed joint. The y direction stays rigid. Centroid model only.">ⓘ</span></label>
+          <div class="grid2" data-show="pat-flex">
+            <label><span class="lt">Flange thickness t <span class="tip" tabindex="0" title="Thickness of the bending flange. Blank = the first clamped part. Its material sets E and the yield strength for the bending check; the beam width is L_y.">ⓘ</span></span> <span class="u">(mm, blank = part 1)</span><input type="number" step="any" min="0" data-key="patFt" placeholder="auto"></label>
           </div>
         </div>
       </fieldset>
@@ -301,9 +307,14 @@
 
       <div class="card" id="pat-card" hidden>
         <div class="card-head"><h2>Bolt pattern</h2><span class="badge" id="pat-badge"></span></div>
-        <p class="card-note">Rigid-flange (bolt group) model: tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.</p>
+        <p class="card-note" id="pat-note">Rigid-flange (bolt group) model: tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.</p>
         <div class="drawing" id="pat-view"></div>
         <div class="table-wrap"><table class="data" id="pat-table"></table></div>
+        <div id="pat-flex" hidden>
+          <h3 class="sub">Flexible flange: deflection and bolt column loads</h3>
+          <div class="drawing" id="pat-flex-view"></div>
+          <div class="metrics" id="pat-flex-metrics"></div>
+        </div>
       </div>
 
       <div class="card" id="pry-card" hidden>
@@ -425,13 +436,19 @@
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
     <h3 id="help-pattern">Bolt patterns</h3>
-    <p>Tick <b>Loads act on a bolt pattern</b> in section 6 and enter the forces and moments on the whole flange. The tool treats the flange as rigid (the classical bolt-group model):</p>
+    <p>Tick <b>Loads act on a bolt pattern</b> in section 6 and enter the forces and moments on the whole flange. The axial load F<sub>z</sub> can act off-centre at (x<sub>F</sub>, y<sub>F</sub>). By default the tool treats the flange as rigid (the classical bolt-group model):</p>
     <ul>
       <li><b>Shear</b> F<sub>x</sub>, F<sub>y</sub> is shared equally; torsion M<sub>z</sub> adds a shear M<sub>z</sub>·r<sub>i</sub>/Σr² at right angles to each bolt radius.</li>
       <li><b>Tension</b> F<sub>z</sub> is shared equally; bending adds M·y<sub>i</sub>/Σy² about the bolt-group centroid (<b>centroid model</b>, valid while the preloaded joint stays closed) or M·h<sub>i</sub>/Σh² about the flange edge (<b>heel model</b>, for a joint that has opened or for ultimate loads).</li>
       <li>The bolt with the highest tension and the highest shear are combined into one design bolt (conservative if they are different bolts), which runs through all the checks.</li>
     </ul>
-    <p class="about-meta">Not included: flange bending and prying forces, unequal bolt stiffness, and the eccentric loading and clamping inside one bolt (VDI 2230 Part 1 eccentric case). For flexible flanges these can raise the bolt load considerably.</p>
+    <p><b>Flexible flange</b> (rectangular patterns, centroid model). A rigid flange shares a load by lever arms alone. A real flange bends, so the bolts close to a local load take more and the distant ones less. Tick <b>Flexible flange</b> to model the flange as a beam along x (Euler–Bernoulli, width L<sub>y</sub>, thickness t, E of the first clamped part) resting on one spring per bolt column:</p>
+    <ul>
+      <li><b>Spring stiffness</b> per bolt k = 1/δ<sub>S</sub> + 1/δ<sub>P</sub>, the stiffness of the closed, preloaded joint against an external load (bolt stretching and parts unloading in parallel). It comes from the same VDI 2230 resiliences as the single-bolt check.</li>
+      <li>F<sub>z</sub> at x<sub>F</sub> and M<sub>y</sub> load the beam. It is solved with beam finite elements (exact for point loads), giving each column load R = k<sub>col</sub>·w, the deflection line and the largest flange bending moment. Along y the flange stays rigid: M<sub>x</sub> (including F<sub>z</sub>·y<sub>F</sub>) is shared by y<sub>i</sub>/Σy².</li>
+      <li>The result is compared with the rigid model bolt by bolt, and the flange bending stress M<sub>max</sub>/(L<sub>y</sub>·t²/6) is checked against R<sub>p</sub>. A very thick flange gives the rigid result; a thin one puts most of the load on the nearest bolt.</li>
+    </ul>
+    <p class="about-meta">The flexible model assumes a rigid base, a joint that stays closed at every bolt, and a flange that acts as a beam (long compared with its width). Plate effects across the width, a flexible base and opened joints need FEA. Prying forces and the VDI 2230 eccentric case of a single bolt are separate options (sections 5 and 6). Circular flanges loaded through a pipe or hub are symmetric enough that the rigid model fits well.</p>
 
     <h3 id="help-pry">Prying</h3>
     <p>When a web or an angle leg pulls on a flange, the flange bends, its outer edge presses on the support, and it levers an extra force Q onto the bolt: the bolt carries B = T + Q. Tick <b>Flange prying</b> in section 5 and enter, per bolt, the distance to the web face b, the distance to the flange edge a, the flange width per bolt w and the flange thickness t.</p>
@@ -499,10 +516,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=25"></script>
-  <script src="js/calc.js?v=25"></script>
-  <script src="js/presets.js?v=25"></script>
-  <script src="js/drawing.js?v=25"></script>
-  <script src="js/app.js?v=25"></script>
+  <script src="js/data.js?v=27"></script>
+  <script src="js/calc.js?v=27"></script>
+  <script src="js/presets.js?v=27"></script>
+  <script src="js/drawing.js?v=27"></script>
+  <script src="js/app.js?v=27"></script>
 </body>
 </html>

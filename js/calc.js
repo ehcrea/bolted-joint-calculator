@@ -102,14 +102,79 @@
     }
     return pts;
   }
+  // Solve A·x = b (dense, Gaussian elimination with partial pivoting); returns null if singular.
+  function solveLin(A, b) {
+    const n = b.length, M = A.map((r, i) => r.concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let p = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      if (Math.abs(M[p][c]) < 1e-300) return null;
+      [M[c], M[p]] = [M[p], M[c]];
+      for (let r = c + 1; r < n; r++) { const f = M[r][c] / M[c][c]; if (f) for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+    }
+    const x = new Array(n).fill(0);
+    for (let r = n - 1; r >= 0; r--) { let s = M[r][n]; for (let k = r + 1; k < n; k++) s -= M[r][k] * x[k]; x[r] = s / M[r][r]; }
+    return x;
+  }
+
+  // Flexible flange: the flange is a beam along x (Euler-Bernoulli, EI = E·L_y·t³/12) on elastic supports, one per
+  // bolt column (stiffness = number of bolts · k, k = 1/δ_S + 1/δ_P of one closed joint). The base is rigid.
+  // Loads: F_z at x_F and the moment M_y. Returns the column forces, deflection line and flange bending moments.
+  function flexBeam(pts, opt) {
+    const { k, EI, Fz, My, xF, half } = opt;
+    const cols = [];
+    pts.forEach((p, i) => { let c = cols.find(q => Math.abs(q.x - p.x) < 1e-6); if (!c) cols.push(c = { x: p.x, idx: [] }); c.idx.push(i); });
+    cols.sort((a, b) => a.x - b.x);
+    if (cols.length < 2 || !(k > 0) || !(EI > 0)) return null;
+    const xs = [-half, half, xF].concat(cols.map(c => c.x)).sort((a, b) => a - b);
+    const nodes = xs.filter((x, i) => i === 0 || x - xs[i - 1] > 1e-6);
+    const nodeOf = x => nodes.findIndex(v => Math.abs(v - x) <= 1e-6);
+    const N = nodes.length, K = Array.from({ length: 2 * N }, () => new Array(2 * N).fill(0)), F = new Array(2 * N).fill(0);
+    const ke = L => {
+      const a = EI / (L * L * L);
+      return [[12 * a, 6 * L * a, -12 * a, 6 * L * a], [6 * L * a, 4 * L * L * a, -6 * L * a, 2 * L * L * a],
+        [-12 * a, -6 * L * a, 12 * a, -6 * L * a], [6 * L * a, 2 * L * L * a, -6 * L * a, 4 * L * L * a]];
+    };
+    for (let e = 0; e < N - 1; e++) {
+      const m = ke(nodes[e + 1] - nodes[e]), dof = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) K[dof[i]][dof[j]] += m[i][j];
+    }
+    cols.forEach(c => { c.node = nodeOf(c.x); c.k = k * c.idx.length; K[2 * c.node][2 * c.node] += c.k; });
+    const jF = nodeOf(xF);
+    F[2 * jF] += Fz;
+    F[2 * jF + 1] += -My;                       // a positive M_y lifts the −x side (same sign as the rigid model)
+    const u = solveLin(K, F);
+    if (!u) return null;
+    cols.forEach(c => { c.w = u[2 * c.node]; c.R = c.k * c.w; });
+    // bending moments at the element ends and the deflection line (Hermite shape functions)
+    let Mmax = 0, xM = 0;
+    const line = [];
+    for (let e = 0; e < N - 1; e++) {
+      const L = nodes[e + 1] - nodes[e], m = ke(L), ue = [u[2 * e], u[2 * e + 1], u[2 * e + 2], u[2 * e + 3]];
+      const f = m.map(r => r[0] * ue[0] + r[1] * ue[1] + r[2] * ue[2] + r[3] * ue[3]);
+      if (Math.abs(f[1]) > Mmax) { Mmax = Math.abs(f[1]); xM = nodes[e]; }
+      if (Math.abs(f[3]) > Mmax) { Mmax = Math.abs(f[3]); xM = nodes[e + 1]; }
+      const steps = 8;
+      for (let s = (e === 0 ? 0 : 1); s <= steps; s++) {
+        const t = s / steps, h1 = 1 - 3 * t * t + 2 * t * t * t, h2 = L * (t - 2 * t * t + t * t * t), h3 = 3 * t * t - 2 * t * t * t, h4 = L * (t * t * t - t * t);
+        line.push({ x: nodes[e] + t * L, w: h1 * ue[0] + h2 * ue[1] + h3 * ue[2] + h4 * ue[3] });
+      }
+    }
+    return { cols, nodes, line, Mmax, xM };
+  }
+
   // Rigid-flange (bolt group) model. In-plane: direct shear F/n plus torsion Mz·r/Σr². Out of plane:
   //  - 'centroid': joint stays closed, bending about the bolt-group centroid: Fz/n + (Mx·y/Σy² − My·x/Σx²)
   //  - 'heel': flange tips about its edge after opening (prying not included): Fz/n + M·h/Σh², h = distance to the heel line
   // Loads: forces in kN, moments in N·m (converted to N and N·mm).
-  function boltPattern(inp) {
+  // F_z acts at (x_F, y_F); its offset adds M_x = F_z·y_F and M_y = −F_z·x_F about the centroid.
+  // stiff (optional) = { k } switches the rectangular pattern to the flexible-flange model along x.
+  function boltPattern(inp, stiff) {
     const pts = patternBolts(inp), n = pts.length;
     const Fx = (+inp.patFx || 0) * 1000, Fy = (+inp.patFy || 0) * 1000, Fz = (+inp.patFz || 0) * 1000;
-    const Mx = (+inp.patMx || 0) * 1000, My = (+inp.patMy || 0) * 1000, Mz = (+inp.patMz || 0) * 1000;
+    const xF = +inp.patXF || 0, yF = +inp.patYF || 0;
+    const Mx0 = (+inp.patMx || 0) * 1000, My0 = (+inp.patMy || 0) * 1000, Mz = (+inp.patMz || 0) * 1000;
+    const Mx = Mx0 + Fz * yF, My = My0 - Fz * xF;
     const Sx2 = pts.reduce((s, p) => s + p.x * p.x, 0), Sy2 = pts.reduce((s, p) => s + p.y * p.y, 0), Sr2 = Sx2 + Sy2;
     const method = inp.patMethod === 'heel' ? 'heel' : 'centroid';
     const Mb = Math.hypot(Mx, My);
@@ -129,11 +194,32 @@
       const qx = Fx / n - (Sr2 > 0 ? Mz * p.y / Sr2 : 0), qy = Fy / n + (Sr2 > 0 ? Mz * p.x / Sr2 : 0);
       return { i: i + 1, x: p.x, y: p.y, h: p.h, FA, FAt: Math.max(0, FA), qx, qy, FQ: Math.hypot(qx, qy) };
     });
+    // flexible flange (rectangular pattern, joint closed): x direction from the beam on elastic supports, y rigid
+    let flex = null;
+    if (stiff && inp.patType === 'rect' && method === 'centroid') {
+      const mat = D.MATERIALS[(inp.plates && inp.plates[0] && inp.plates[0].mat) || 'S235'] || D.MATERIALS.S235;
+      const t = +inp.patFt > 0 ? +inp.patFt : Math.max(0, +(inp.plates && inp.plates[0] && inp.plates[0].t) || 0);
+      const b = +inp.patLy > 0 ? +inp.patLy : (Math.max(...pts.map(p => p.y)) - Math.min(...pts.map(p => p.y)) + 2 * (+inp.patSy || 20));
+      const half = Math.max((+inp.patLx || 0) / 2, ...pts.map(p => Math.abs(p.x)), Math.abs(xF));
+      const EI = mat.E * b * t * t * t / 12;
+      const fb = flexBeam(pts, { k: stiff.k, EI, Fz, My: My0, xF, half });
+      if (fb) {
+        const W = b * t * t / 6, sig = fb.Mmax / W;
+        flex = Object.assign(fb, { t, b, E: mat.E, EI, k: stiff.k, half, W, sig, mat, fAllow: mat.Rp || mat.Rm, brittle: !mat.Rp });
+        bolts.forEach((bo, i) => {
+          const c = fb.cols.find(q => q.idx.includes(i));
+          bo.FArigid = bo.FA;
+          bo.FA = c.R / c.idx.length + (Sy2 > 0 ? Mx * bo.y / Sy2 : 0);
+          bo.FAt = Math.max(0, bo.FA);
+        });
+      }
+    }
     const critA = bolts.reduce((a, b) => (b.FA > a.FA ? b : a), bolts[0]);
     let critQ = bolts.reduce((a, b) => (b.FQ > a.FQ ? b : a), bolts[0]);
     if (critA.FQ >= critQ.FQ * (1 - 1e-9)) critQ = critA;          // ties: report the max-tension bolt
     const ratio = Math.min(1, Math.max(0, +inp.patR || 0));
-    return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Sx2, Sy2, Sr2, Sh2, c, u, Mb, critA, critQ,
+    const rigidMax = flex ? Math.max(0, ...bolts.map(b => b.FArigid)) : null;
+    return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Mx0, My0, xF, yF, Sx2, Sy2, Sr2, Sh2, c, u, Mb, critA, critQ, flex, rigidMax,
       FAmax: Math.max(0, critA.FA), FQmax: critQ.FQ, ratio, sameBolt: critA.FQ >= critQ.FQ * (1 - 1e-9),
       compression: bolts.some(b => b.FA < 0) };
   }
@@ -145,7 +231,16 @@
     // Bolt pattern: the most loaded bolt (envelope of max tension and max shear) is checked as the single bolt.
     let pat = null;
     if (inp.patOn) {
-      pat = boltPattern(inp);
+      let stiff = null;
+      const wantFlex = !!inp.patFlex;
+      if (wantFlex && inp.patType === 'rect' && inp.patMethod !== 'heel') {
+        // joint stiffness of one bolt from a plain single-bolt run (closed joint: bolt and parts in parallel)
+        const one = calculate(Object.assign({}, inp, { patOn: false, pryOn: false, eccOn: false, nasa: false, FAmax: 0, FAmin: 0, FQ: 0 }));
+        if (one.valid) stiff = { k: 1 / one.res.deltaS + 1 / one.res.deltaP, deltaS: one.res.deltaS, deltaP: one.res.deltaP };
+      }
+      pat = boltPattern(inp, stiff);
+      if (stiff) pat.stiff = stiff;
+      if (wantFlex && !pat.flex) add('warn', 'Flexible flange: needs a rectangular pattern with at least two bolt columns along x, the centroid model (joint closed) and a flange thickness. The rigid model is used.');
       inp = Object.assign({}, inp, { FAmax: pat.FAmax / 1000, FAmin: pat.ratio * pat.FAmax / 1000, FQ: pat.FQmax / 1000 });
       if (pat.n < 2) add('error', 'The bolt pattern needs at least two bolts.');
       if (!pat.sameBolt && pat.FQmax > 0 && pat.FAmax > 0) add('info', 'Bolt pattern: the highest tension (bolt ' + pat.critA.i + ') and the highest shear (bolt ' + pat.critQ.i + ') are on different bolts. Both maxima are applied to one bolt, which is conservative.');
@@ -530,6 +625,10 @@
     ck('R8', 'Working stress safety S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub>', SF, '≥ 1.0', SF >= 1.0, false, '', SF);
     if (sigA > 0) ck('R9', 'Fatigue safety S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub>', SD, '≥ ' + SDreq, SD >= SDreq, SD >= 1.0, '', SD);
     for (const p of pressures) ck('R7', 'Surface pressure: ' + p.where, p.p, '≤ ' + fmtN(p.pG, 0) + ' MPa', p.Sp >= 1.0, p.Sp >= 0.9, 'MPa', p.Sp);
+    if (pat && pat.flex) {
+      const fx = pat.flex;
+      ck('Pattern', 'Flange bending (flexible flange): σ = M<sub>max</sub> / W', fx.sig, '≤ ' + (fx.brittle ? 'R<sub>m</sub> ' : 'R<sub>p</sub> ') + fmtN(fx.fAllow, 0) + ' MPa', fx.sig <= fx.fAllow, false, 'MPa', fx.sig > 0 ? fx.fAllow / fx.sig : undefined);
+    }
     if (ecc && isFinite(FKA)) ck('R10', 'No one-sided opening: F<sub>KR,min</sub> ≥ F<sub>KA</sub> (eccentric)', FKRmin / 1000, '≥ ' + fmtN(FKA / 1000, 2) + ' kN', FKRmin >= FKA, false, 'kN', FKA > 0 ? FKRmin / FKA : undefined);
     if (pry) {
       const lim = (pry.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + fmtN(pry.fAllow, 0) + ' MPa';

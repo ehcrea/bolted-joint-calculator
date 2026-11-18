@@ -238,6 +238,32 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   near(pp.FAmax, 2000 * (1 + pp.pry.ratio), 1e-12, 'prying on the pattern bolt load');
 }
 
+// ---- flexible flange (beam on elastic bolt supports) ----
+{
+  const base = { thread: 'M8', cls: '8.8', plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 20 }], FQ: 0,
+    patOn: true, patType: 'rect', patNx: 5, patNy: 1, patSx: 60, patSy: 0, patLx: 280, patLy: 40, patPerimeter: false, patFz: 12, patXF: 90, patR: 0 };
+  const rig = C.calculate(stateFrom(base)).pat;
+  const fl = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true }))).pat;
+  ok(fl.flex && !rig.flex, 'flexible model only when ticked');
+  near(fl.bolts.reduce((s, b) => s + b.FA, 0), 12000, 1e-9, 'flexible: bolt loads add up to F_z');
+  near(fl.bolts.reduce((s, b) => s + b.FA * b.x, 0), 12000 * 90, 1e-9, 'flexible: moment equilibrium about the centre');
+  near(rig.bolts[4].FA, 12000 / 5 + 12000 * 90 * 120 / rig.Sx2, 1e-12, 'rigid: load offset x_F acts as a moment');
+  fl.bolts.forEach((b, i) => near(b.FArigid, rig.bolts[i].FA, 1e-12, 'rigid comparison stored, bolt ' + b.i));
+  ok(fl.FAmax > 1.2 * rig.FAmax && fl.critA.i === 4, 'thin flange: the bolt next to the load carries much more than the rigid model says');
+  const stiffF = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patFt: 3000 }))).pat;
+  stiffF.bolts.forEach((b, i) => near(b.FA, rig.bolts[i].FA, 1e-3, 'very stiff flange approaches the rigid model, bolt ' + b.i));
+  const sym = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patXF: 0 }))).pat;
+  near(sym.bolts[0].FA, sym.bolts[4].FA, 1e-9, 'symmetric load: symmetric bolt loads');
+  const ex = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true })));
+  ok(ex.checks.some(c => /Flange bending \(flexible/.test(c.label)), 'flange bending check listed');
+  near(ex.pat.flex.sig, ex.pat.flex.Mmax / (40 * 100 / 6), 1e-12, 'flange stress M / (b t^2 / 6)');
+  // two rows: x from the beam, y rigid
+  const two = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patNy: 2, patSy: 30, patYF: 10 }))).pat;
+  near(two.bolts.reduce((s, b) => s + b.FA * b.y, 0), 12000 * 10, 1e-9, 'two rows: M_x from y_F shared rigidly');
+  const circ = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patType: 'circle' })));
+  ok(!circ.pat.flex && circ.issues.some(i => /Flexible flange/.test(i.text)), 'circular pattern: flexible model not available, warned');
+}
+
 // ---- eccentric clamping and loading ----
 {
   const base = { FAmax: 6, FQ: 0, plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 15 }] };

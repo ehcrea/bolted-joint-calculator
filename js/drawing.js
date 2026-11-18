@@ -529,7 +529,46 @@
     return out.join('');
   }
 
+  // ---------------- flexible flange: deflection line and bolt column loads (flexible vs rigid) ----------------
+  function flexView(r) {
+    const P = r.pat, FX = P && P.flex;
+    if (!FX) return '';
+    const id = 'fx' + (++uid);
+    const VW = 460, VH = 330, x0 = 40, x1 = 420;
+    const X = x => x0 + (x + FX.half) / (2 * FX.half) * (x1 - x0);
+    const yB = 80;                                           // undeformed flange line
+    const wMax = Math.max(1e-12, ...FX.line.map(p => Math.abs(p.w)));
+    const ws = 34 / wMax;                                    // exaggerated deflection
+    const out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Flexible flange deflection and bolt loads">${hatchDefs(id)}`];
+    out.push(`<line x1="${x0}" y1="${yB}" x2="${x1}" y2="${yB}" class="pat-axis"/>`);
+    out.push(`<polyline points="${FX.line.map(p => r1(X(p.x)) + ',' + r1(yB - p.w * ws)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`);
+    out.push(`<text x="${x0}" y="16" class="lbl">flange deflection (exaggerated) with one spring per bolt column</text>`);
+    FX.cols.forEach(c => {
+      const x = X(c.x), y = yB - c.w * ws;
+      out.push(`<path d="M${r1(x)},${r1(y)} l0,4 l-5,3 l10,4 l-10,4 l10,4 l-5,3 l0,4" fill="none" class="pat-axis" style="stroke-dasharray:none"/>`);
+    });
+    const xa = X(P.xF), ya = yB - FX.line.reduce((a, p) => Math.abs(p.x - P.xF) < Math.abs(a.x - P.xF) ? p : a, FX.line[0]).w * ws;
+    if (P.Fz) out.push(`<line x1="${r1(xa)}" y1="${r1(ya - 4)}" x2="${r1(xa)}" y2="${r1(ya - 40)}" class="force" marker-end="url(#${id}-arrF)"/><text x="${r1(xa + 6)}" y="${r1(ya - 26)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">z</tspan></text>`);
+    // bar chart: column loads, flexible (filled) vs rigid (outline)
+    const yBase = 210, hMax = 80;
+    const rig = FX.cols.map(c => c.idx.reduce((s, i) => s + P.bolts[i].FArigid, 0));
+    const vals = FX.cols.map(c => c.R);
+    const vMax = Math.max(1e-9, ...vals.map(Math.abs), ...rig.map(Math.abs));
+    const bw = Math.min(26, (x1 - x0) / FX.cols.length / 3);
+    out.push(`<line x1="${x0}" y1="${yBase}" x2="${x1}" y2="${yBase}" class="pat-axis" style="stroke-dasharray:none"/>`);
+    FX.cols.forEach((c, j) => {
+      const x = X(c.x), hf = vals[j] / vMax * hMax, hr = rig[j] / vMax * hMax;
+      out.push(`<rect x="${r1(x - bw)}" y="${r1(Math.min(yBase, yBase - hf))}" width="${r1(bw)}" height="${r1(Math.abs(hf))}" fill="var(--accent)"/>`);
+      out.push(`<rect x="${r1(x)}" y="${r1(Math.min(yBase, yBase - hr))}" width="${r1(bw)}" height="${r1(Math.abs(hr))}" fill="none" stroke="currentColor" stroke-opacity=".6"/>`);
+      const below = Math.max(0, -hf, -hr);
+      out.push(`<text x="${r1(x)}" y="${r1(yBase + below + 14)}" text-anchor="middle" class="lbl">${f(vals[j] / 1000, 2)}</text>`);
+    });
+    out.push(`<text x="${x0}" y="${VH - 6}" class="lbl">kN per bolt column: filled = flexible flange, outline = rigid model</text>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView };
+  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView, flexView };
 })(window);

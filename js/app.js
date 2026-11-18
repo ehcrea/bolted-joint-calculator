@@ -158,6 +158,7 @@
       ecc: !!state.eccOn,
       pat: !!state.patOn, 'no-pat': !state.patOn,
       'pat-circle': state.patType !== 'rect', 'pat-rect': state.patType === 'rect',
+      'pat-flex': !!state.patOn && state.patType === 'rect' && !!state.patFlex,
     };
     $$('[data-show]').forEach(el => { el.hidden = !el.dataset.show.split(' ').some(t => show[t]); });
     $('#engage-title').textContent = { tapped: 'Tapped part', helicoil: 'Heli-Coil (wire thread insert)', insert: 'Solid threaded insert' }[state.joint] || '';
@@ -332,11 +333,26 @@
     card.hidden = !P;
     if (!P) return;
     $('#pat-view').innerHTML = DR.patternView(r, state);
-    $('#pat-badge').textContent = P.n + ' bolts · ' + (P.method === 'heel' ? 'heel model' : 'centroid model');
-    const head = '<thead><tr><th class="left">Bolt</th><th>x (mm)</th><th>y (mm)</th><th>Tension F<sub>A</sub> (kN)</th><th>Shear F<sub>Q</sub> (kN)</th></tr></thead>';
+    const FX = P.flex;
+    $('#pat-badge').textContent = P.n + ' bolts · ' + (FX ? 'flexible flange' : P.method === 'heel' ? 'heel model' : 'centroid model');
+    $('#pat-note').innerHTML = (FX ? 'Flexible-flange model along x (beam on elastic bolt supports), rigid along y' : 'Rigid-flange (bolt group) model') +
+      ': tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.';
+    const head = '<thead><tr><th class="left">Bolt</th><th>x (mm)</th><th>y (mm)</th><th>Tension F<sub>A</sub> (kN)</th>' + (FX ? '<th>Rigid model (kN)</th>' : '') + '<th>Shear F<sub>Q</sub> (kN)</th></tr></thead>';
     const rows = P.bolts.map(b => `<tr class="${b === P.critA && P.FAmax > 0 ? 'hl' : ''}"><td class="left">${b.i}${b === P.critA && P.FAmax > 0 ? ' <span class="badge">max tension</span>' : ''}${b === P.critQ && P.FQmax > 0 ? ' <span class="badge">max shear</span>' : ''}</td>` +
-      `<td>${f(b.x, 1)}</td><td>${f(b.y, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td><td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
+      `<td>${f(b.x, 1)}</td><td>${f(b.y, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td>${FX ? `<td>${f(b.FArigid / 1000, 3)}</td>` : ''}<td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
     $('#pat-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
+    $('#pat-flex').hidden = !FX;
+    if (FX) {
+      $('#pat-flex-view').innerHTML = DR.flexView(r);
+      const inc = P.rigidMax > 0 ? P.FAmax / P.rigidMax : NaN;
+      $('#pat-flex-metrics').innerHTML = metrics([
+        ['Most loaded bolt', f(P.FAmax / 1000, 2) + ' kN', isFinite(inc) ? f(inc, 2) + '× the rigid model (' + f(P.rigidMax / 1000, 2) + ' kN)' : ''],
+        ['Joint stiffness per bolt k', f(FX.k / 1000, 0) + ' kN/mm', '1/δ<sub>S</sub> + 1/δ<sub>P</sub> (joint closed)'],
+        ['Flange bending stiffness EI', sci(FX.EI) + ' N·mm²', 'b = ' + f(FX.b, 0) + ' mm, t = ' + f(FX.t, 1) + ' mm, E = ' + f(FX.E, 0) + ' MPa'],
+        ['Flange bending stress', f(FX.sig, 0) + ' MPa', FX.sig <= FX.fAllow ? '≤ ' + f(FX.fAllow, 0) + ' MPa (' + FX.mat.label + ')' : '<span class="status error">above ' + (FX.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' ' + f(FX.fAllow, 0) + ' MPa</span>'],
+        ['Max flange deflection', f(Math.max(...FX.line.map(p => Math.abs(p.w))) * 1000, 1) + ' µm', 'at the load F<sub>z</sub> = ' + f(P.Fz / 1000, 2) + ' kN'],
+      ]);
+    }
   }
   function renderNasa(r) {
     const card = $('#nasa-card'), N = r.nasa;
@@ -392,7 +408,18 @@
         ['F<sub>Q,i</sub> = |(F<sub>x</sub>/n − M<sub>z</sub>·y<sub>i</sub>/Σr², F<sub>y</sub>/n + M<sub>z</sub>·x<sub>i</sub>/Σr²)|', 'bolt ' + PT.critQ.i, kN(PT.FQmax)],
         ['F<sub>A,max</sub>, F<sub>A,min</sub> = R·F<sub>A,max</sub>, F<sub>Q</sub> → single-bolt check', 'R = ' + N(PT.ratio, 2), kN(PT.FAmax) + ', ' + kN(PT.ratio * PT.FAmax) + ', ' + kN(PT.FQmax)],
       ];
-      step('Pattern', 'Bolt pattern load distribution (rigid flange)', rows, PT.method === 'heel'
+      if (PT.flex) {
+        const FX = PT.flex, cc = FX.cols.find(c => c.idx.includes(cb.i - 1));
+        rows.splice(1, 1,
+          ['k = 1/δ<sub>S</sub> + 1/δ<sub>P</sub> (per bolt, joint closed)', '1/' + sci(PT.stiff.deltaS) + ' + 1/' + sci(PT.stiff.deltaP), N(FX.k / 1000, 0) + ' kN/mm'],
+          ['EI = E·L<sub>y</sub>·t³/12 (flange as a beam along x)', N(FX.E, 0) + '·' + N(FX.b, 0) + '·' + N(FX.t, 1) + '³/12', sci(FX.EI) + ' N·mm²'],
+          ['Beam on ' + FX.cols.length + ' spring supports (n<sub>col</sub>·k), F<sub>z</sub> at x<sub>F</sub> = ' + N(PT.xF, 1) + ' mm, M<sub>y</sub> = ' + mm(PT.My0) + ' N·m', 'column x = ' + N(cc.x, 1) + ' mm: R = k<sub>col</sub>·w = ' + N(cc.k / 1000, 0) + '·' + N(cc.w * 1000, 2) + ' µm', kN(cc.R)],
+          ['F<sub>A,i</sub> = R<sub>col</sub>/n<sub>col</sub> + M<sub>x</sub>·y<sub>i</sub>/Σy²', 'bolt ' + cb.i + ': ' + kN(cc.R) + '/' + cc.idx.length + ' + ' + mm(PT.Mx) + '·' + N(cb.y, 1) + '/' + N(PT.Sy2, 0), kN(cb.FA) + ' (rigid ' + kN(cb.FArigid) + ')'],
+          ['σ = M<sub>max</sub> / (L<sub>y</sub>·t²/6)', N(FX.Mmax / 1000, 1) + ' N·m at x = ' + N(FX.xM, 1) + ' mm', N(FX.sig, 0) + ' MPa']);
+      }
+      step('Pattern', 'Bolt pattern load distribution (' + (PT.flex ? 'flexible flange' : 'rigid flange') + ')', rows, PT.flex
+        ? 'Flexible flange: the flange is an Euler–Bernoulli beam along x on one spring per bolt column; the base is rigid and the joint must stay closed. Along y the flange is taken as rigid.'
+        : PT.method === 'heel'
         ? 'Heel model: the joint has opened and the flange tips about its edge. Prying forces are not included.'
         : 'Centroid model: valid while the joint stays closed. Negative values mean the bending reduces the clamp load at that bolt.');
     }
