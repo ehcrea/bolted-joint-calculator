@@ -155,6 +155,7 @@
       'mode-nu': state.mode !== 'torque', 'mode-torque': state.mode === 'torque',
       nasa: !!state.nasa,
       pry: !!state.pryOn,
+      ecc: !!state.eccOn,
       pat: !!state.patOn, 'no-pat': !state.patOn,
       'pat-circle': state.patType !== 'rect', 'pat-rect': state.patType === 'rect',
     };
@@ -218,6 +219,7 @@
       $('#nasa-card').hidden = true;
       $('#pat-card').hidden = true;
       $('#pry-card').hidden = true;
+      $('#ecc-card').hidden = true;
       return;
     }
     hero.classList.remove('invalid');
@@ -258,6 +260,7 @@
     renderChecks(r);
     renderPattern(r);
     renderPry(r);
+    renderEcc(r);
     renderNasa(r);
     renderStrip(r);
     $('#steps').innerHTML = steps(r);
@@ -304,6 +307,24 @@
       ['Stiffness term w·t⁴/(a·b²·A<sub>b</sub>)', f(p.X, 2), 'prying ends above 15'],
       ['Flange bending, web face', f(p.sigWeb, 0) + ' MPa', (st(p.sigWeb) || '≤ ' + f(p.fAllow, 0) + ' MPa')],
       ['Flange bending, bolt line', f(p.sigBolt, 0) + ' MPa', (st(p.sigBolt) || 'net width ' + f(p.wNet, 1) + ' mm')],
+    ]);
+  }
+  function renderEcc(r) {
+    const card = $('#ecc-card'), e = r.ecc;
+    card.hidden = !e;
+    if (!e) return;
+    $('#ecc-view').innerHTML = DR.eccView(r);
+    const open = isFinite(e.FKA) && r.FKRmin < e.FKA;
+    const badge = $('#ecc-badge');
+    badge.textContent = open ? 'opens on one side' : 'stays closed';
+    badge.className = 'badge' + (open ? ' bad' : '');
+    $('#ecc-metrics').innerHTML = metrics([
+      ['Load factor Φ<sub>en</sub>*', f(e.PhiEn, 4), 'concentric Φ<sub>n</sub> = ' + f(e.PhiCon, 4)],
+      ['Resilience δ<sub>P</sub>* / δ<sub>P</sub>', f(e.dPstar / e.dP, 3), 'eccentric clamping'],
+      ['Bending inertia Ī<sub>Bers</sub>', f(e.IBers, 0) + ' mm⁴', e.IBauto ? (e.IBers < e.Iers ? 'limited to I<sub>BT</sub>' : 'auto estimate') : 'entered'],
+      ['Clamp load against opening F<sub>KA</sub>', isFinite(e.FKA) ? f(e.FKA / 1000, 2) + ' kN' : '∞', 'F<sub>KR,min</sub> = ' + f(r.FKRmin / 1000, 2) + ' kN'],
+      ['Bending factor on σ<sub>a</sub>', e.bendFactor !== undefined ? f(e.bendFactor, 2) : '–', 'σ<sub>SAb</sub> / σ<sub>SA</sub>'],
+      ['Interface A<sub>D</sub>, I<sub>BT</sub>', f(e.AD, 0) + ' mm², ' + sci(e.IBT) + ' mm⁴', ''],
     ]);
   }
   function renderPattern(r) {
@@ -384,6 +405,20 @@
       ['σ<sub>web</sub> = 6·|T·b − Q·a| / (w·t²)', '6·' + N(PY.Mweb / 1000, 1) + ' N·m / (' + N(PY.w, 1) + '·' + N(PY.t, 1) + '²)', N(PY.sigWeb, 0) + ' MPa'],
       ['σ<sub>bolt</sub> = 6·Q·a / ((w − d<sub>h</sub>)·t²)', '6·' + N(PY.Mbolt / 1000, 1) + ' N·m / (' + N(PY.wNet, 1) + '·' + N(PY.t, 1) + '²)', N(PY.sigBolt, 0) + ' MPa'],
     ], 'Flange checked against ' + (PY.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + N(PY.fAllow, 0) + ' MPa of ' + PY.mat.label + '. A<sub>b</sub> is the stress area.');
+    const EC = r.ecc;
+    if (EC) step('Eccentric', 'Eccentric clamping and loading (VDI 2230 Part 1)', [
+      ['A<sub>D</sub> = b<sub>T</sub>·c<sub>T</sub> − π/4·d<sub>h</sub>²', N(EC.bT, 1) + '·' + N(EC.cT, 1) + ' − π/4·' + N(r.dh, 1) + '²', N(EC.AD, 0) + ' mm²'],
+      ['I<sub>BT</sub> = b<sub>T</sub>·c<sub>T</sub>³/12 − π/64·d<sub>h</sub>⁴', '', N(EC.IBT, 0) + ' mm⁴'],
+      EC.IBauto
+        ? ['Ī<sub>Bers</sub> = min(π/64·(D<sub>ers</sub>⁴ − d<sub>h</sub>⁴), I<sub>BT</sub>), D<sub>ers</sub> from l<sub>K</sub>/(E<sub>P</sub>·δ<sub>P</sub>)', 'D<sub>ers</sub> = ' + N(EC.Ders, 2) + ' mm', N(EC.IBers, 0) + ' mm⁴']
+        : ['Ī<sub>Bers</sub> (entered)', '', N(EC.IBers, 0) + ' mm⁴'],
+      ['β<sub>P</sub> = l<sub>K</sub> / (E<sub>P</sub>·Ī<sub>Bers</sub>)', N(r.lK, 2) + ' / (' + N(r.EP, 0) + '·' + N(EC.IBers, 0) + ')', sci(EC.betaP) + ' 1/(N·mm)'],
+      ['δ<sub>P</sub>* = δ<sub>P</sub> + s<sub>sym</sub>²·β<sub>P</sub>', sci(EC.dP) + ' + ' + N(EC.ssym, 1) + '²·β<sub>P</sub>', sci(EC.dPstar) + ' mm/N'],
+      ['δ<sub>P</sub>** = δ<sub>P</sub> + s<sub>sym</sub>·a·β<sub>P</sub>', sci(EC.dP) + ' + ' + N(EC.ssym, 1) + '·' + N(EC.a, 1) + '·β<sub>P</sub>', sci(EC.dPss) + ' mm/N'],
+      ['Φ<sub>en</sub>* = n·δ<sub>P</sub>** / (δ<sub>S</sub> + δ<sub>P</sub>*)', N(r.n, 2) + '·' + sci(EC.dPss) + ' / (' + sci(r.res.deltaS) + ' + ' + sci(EC.dPstar) + ')', N(EC.PhiEn, 4)],
+      ['F<sub>KA</sub> = (F<sub>A,max</sub>·(a·u − s<sub>sym</sub>·u) + M<sub>B</sub>·u) / (I<sub>BT</sub>/A<sub>D</sub> + s<sub>sym</sub>·u)', 'u = ' + N(EC.u, 1) + ' mm' + (EC.uAuto ? ' (c<sub>T</sub>/2)' : '') + ', M<sub>B</sub> = ' + N(EC.MB / 1000, 1) + ' N·m', isFinite(EC.FKA) ? kN(EC.FKA) : '∞'],
+      ['σ<sub>SAb</sub>/σ<sub>SA</sub> = 1 + (a/Φ<sub>en</sub>* − s<sub>sym</sub>)·(l<sub>K</sub>/l<sub>ers</sub>)·(E<sub>S</sub>/E<sub>P</sub>)·π·d<sub>S</sub>³/(8·Ī<sub>Bers</sub>)', 'l<sub>ers</sub> = ' + N(EC.lers, 1) + ' mm', EC.bendFactor !== undefined ? N(EC.bendFactor, 2) : '—'],
+    ], 'Φ<sub>en</sub>* replaces Φ<sub>n</sub> in R7 to R9, δ<sub>P</sub>* is used for embedding and temperature, F<sub>KA</sub> enters F<sub>K,erf</sub>, and σ<sub>a</sub> in R9 includes the bending factor. Valid only while the joint stays closed (F<sub>KR,min</sub> ≥ F<sub>KA</sub>).');
     step('R0', 'Thread geometry and stress area', [
       ['d<sub>2</sub> = d − 0.6495·P', N(g.d) + ' − 0.6495·' + N(g.P), N(g.d2, 3) + ' mm'],
       ['d<sub>3</sub> = d − 1.2269·P', N(g.d) + ' − 1.2269·' + N(g.P), N(g.d3, 3) + ' mm'],
@@ -442,7 +477,7 @@
       ['S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub> ≥ 1.0', N(r.bc.Rp, 0) + ' / ' + N(r.sigRedB, 0), '<b>' + N(r.SF, 2) + '</b>'],
     ]);
     step('R9', 'Alternating stress (fatigue)', [
-      ['σ<sub>a</sub> = Φ<sub>n</sub>·(F<sub>A,max</sub> − F<sub>A,min</sub>) / (2·A<sub>S</sub>)', N(r.Phi, 4) + '·(' + kN(r.FAmax) + ' − ' + kN(r.FAmin) + ') / (2·' + N(g.As, 1) + ')', N(r.sigA, 1) + ' MPa'],
+      [(r.ecc && r.bendFactor !== 1 ? 'σ<sub>a</sub> = k<sub>b</sub>·' : 'σ<sub>a</sub> = ') + 'Φ<sub>n</sub>·(F<sub>A,max</sub> − F<sub>A,min</sub>) / (2·A<sub>S</sub>)', (r.ecc && r.bendFactor !== 1 ? N(r.bendFactor, 2) + '·' : '') + N(r.Phi, 4) + '·(' + kN(r.FAmax) + ' − ' + kN(r.FAmin) + ') / (2·' + N(g.As, 1) + ')', N(r.sigA, 1) + ' MPa'],
       ['σ<sub>ASV</sub> = 0.85·(150/d + 45)', '0.85·(150/' + N(g.d) + ' + 45)', N(r.sigASV, 1) + ' MPa'],
       state.rolledAfter ? ['σ<sub>ASG</sub> = (2 − F<sub>Sm</sub>/F<sub>0.2min</sub>)·σ<sub>ASV</sub>', '(2 − ' + kN(r.FSm) + '/' + kN(r.F02) + ')·' + N(r.sigASV, 1), N(r.sigASG, 1) + ' MPa'] : null,
       ['S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub> ≥ 1.2', r.sigA > 0 ? N(r.sigAS, 1) + ' / ' + N(r.sigA, 1) : 'static load', '<b>' + (isFinite(r.SD) ? N(r.SD, 2) : '—') + '</b>'],

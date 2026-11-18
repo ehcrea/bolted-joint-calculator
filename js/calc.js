@@ -291,7 +291,42 @@
     // ---- R3: load factor ----
     const n = Math.min(1, Math.max(0, inp.n ?? 0.5));
     const PhiK = deltaP / (deltaS + deltaP);
-    const Phi = n * PhiK;
+    let Phi = n * PhiK;
+
+    // ---- eccentric clamping and loading (VDI 2230 Part 1, joint still closed) ----
+    // Signs: s_sym (bolt axis) and a (load line) measured from the axis of the symmetric deformation body
+    // (centre of the interface), positive towards the edge U where the joint would open first; u = distance to U.
+    let ecc = null;
+    if (inp.eccOn) {
+      const cT = Math.max(0, +inp.eccC || 0), bT = Math.max(0, +inp.eccB || 0);
+      if (cT <= 0 || bT <= 0) add('error', 'Eccentric case: enter the interface length c<sub>T</sub> and width b<sub>T</sub>.');
+      else {
+        const ssym = +inp.eccS || 0, aL = +inp.eccA || 0;
+        const u = +inp.eccU > 0 ? +inp.eccU : cT / 2;
+        const AD = bT * cT - PI / 4 * dh * dh;                                   // interface area
+        const IBT = bT * Math.pow(cT, 3) / 12 - PI / 64 * Math.pow(dh, 4);       // its moment of inertia
+        // equivalent bending inertia of the deformation body: cylinder with the same axial resilience as δ_P
+        const Aers = lK / (EP * deltaP);
+        const Ders = Math.sqrt(4 * Aers / PI + dh * dh);
+        const Iers = PI / 64 * (Math.pow(Ders, 4) - Math.pow(dh, 4));
+        const IBauto = !(+inp.eccI > 0);
+        const IBers = IBauto ? Math.min(Iers, IBT) : +inp.eccI;
+        const betaP = lK / (EP * IBers);                                        // bending resilience of the parts
+        const dPstar = deltaP + ssym * ssym * betaP;                            // eccentric clamping
+        const dPss = deltaP + ssym * aL * betaP;                                // eccentric loading
+        const PhiEn = n * dPss / (deltaS + dPstar);
+        // bending substitute length of the bolt referred to d_S (bending stiffness ∝ d⁴)
+        const r4 = x => Math.pow(g.ds / x, 4);
+        const lers = lSK * r4(d) + ls * r4(d) + lGew * r4(g.d3) + lG * r4(g.d3) + lM * r4(d);
+        ecc = { cT, bT, ssym, a: aL, u, uAuto: !(+inp.eccU > 0), AD, IBT, Aers, Ders, Iers, IBers, IBauto, betaP, dPstar, dPss, PhiEn, PhiCon: n * PhiK, dP: deltaP, lers,
+          MB: (+inp.eccMB || 0) * 1000 };
+        Phi = PhiEn;
+        if (Math.abs(ssym) > cT / 2 || Math.abs(aL) > cT) add('warn', 'Eccentric case: s<sub>sym</sub> or a lies outside the interface c<sub>T</sub>; check the geometry and the sign convention.');
+        if (PhiEn < 0) add('warn', 'Eccentric case: the load factor Φ<sub>en</sub>* is negative (the load relieves the bolt); check the signs of s<sub>sym</sub> and a.');
+        if (inp.pryOn) add('info', 'Prying and the eccentric case both describe a bending flange: using both counts the effect twice. Use one of them.');
+      }
+    }
+    const deltaPe = ecc ? ecc.dPstar : deltaP;   // resilience of the parts for preload changes (eccentric clamping)
 
     // ---- R4: preload changes: embedding and temperature ----
     const shear = (+inp.FQ || 0) > 0;
@@ -304,11 +339,11 @@
     const fZum = nThread * ev[0] + nBear * ev[1] + nInter * ev[2];
     const fZ = fZum / 1000;
     // Preload lost to embedding, evaluated at F_M,min (the case that matters for the residual clamp load).
-    const FZ0 = fZ / (deltaS0 + deltaP);                 // without any spring effect
-    let FZ = fZ / (deltaS + deltaP);
+    const FZ0 = fZ / (deltaS0 + deltaPe);                // without any spring effect
+    let FZ = fZ / (deltaS + deltaPe);
     let springStage = null;
     if (lock && lock.key === 'conical' && !springAlways) {
-      const stiff = deltaS0 + deltaP;
+      const stiff = deltaS0 + deltaPe;
       const fToFlat = Math.max(0, FMmin - lock.Fflat) * stiff;   // settling taken while the washer is still flat
       if (fZ > fToFlat) {
         FZ = Math.max(0, FMmin - lock.Fflat) + (fZ - fToFlat) / (stiff + dC);
@@ -316,7 +351,7 @@
       } else FZ = fZ / stiff;
     }
     const dT = +inp.dT || 0;
-    const dFth = lK * (alphaP - bc.alpha) * dT / (deltaS + deltaP); // + = preload gain
+    const dFth = lK * (alphaP - bc.alpha) * dT / (deltaS + deltaPe); // + = preload gain
     const thLoss = Math.max(0, -dFth), thGain = Math.max(0, dFth);
 
     // ---- R2: required clamp load ----
@@ -328,7 +363,15 @@
     const SGreq = +inp.SGreq || 1.2;
     const FKQ = FQ > 0 ? FQ * SGreq / (qF * muT) : 0;
     const FKextra = (+inp.FKmin || 0) * 1000;
-    const FKerf = Math.max(FKQ, FKextra);
+    // eccentric case: clamp load needed so that the joint does not open on one side (VDI 2230 F_KA)
+    let FKA = 0;
+    if (ecc) {
+      const den = ecc.IBT / ecc.AD + ecc.ssym * ecc.u;
+      FKA = den > 0 ? Math.max(0, (FAmax * (ecc.a * ecc.u - ecc.ssym * ecc.u) + ecc.MB * ecc.u) / den) : Infinity;
+      ecc.FKA = FKA; ecc.den = den;
+      if (!(den > 0)) add('error', 'Eccentric case: I<sub>BT</sub>/A<sub>D</sub> + s<sub>sym</sub>·u must be positive; the bolt is too far from the opening edge for this model.');
+    }
+    const FKerf = Math.max(FKQ, FKextra, isFinite(FKA) ? FKA : 0);
     const FPA = (1 - Phi) * FAmax;
     const FSA = Phi * FAmax;
     const FMerf = FKerf + FPA + FZ + thLoss;
@@ -356,7 +399,15 @@
     const SG = FQ > 0 ? FKRmin * qF * muT / FQ : Infinity;
 
     // ---- R9: fatigue (alternating stress) ----
-    const sigA = Phi * (FAmax - FAmin) / (2 * g.As);
+    // eccentric loading: tension plus bending in the bolt, σ_SAb = [1 + (a/Φ_en* − s_sym)·(l_K/l_ers)·(E_S/E_P)·π·d_S³/(8·Ī_Bers)]·Φ_en*·F_A/A_S
+    let bendFactor = 1;
+    if (ecc && Math.abs(Phi) > 1e-9) {
+      bendFactor = 1 + (ecc.a / Phi - ecc.ssym) * (lK / ecc.lers) * (ES / EP) * PI * Math.pow(g.ds, 3) / (8 * ecc.IBers);
+      ecc.bendFactor = bendFactor;
+      ecc.sigSAbo = bendFactor * Phi * FAmax / g.As; ecc.sigSAbu = bendFactor * Phi * FAmin / g.As;
+      ecc.sigSAo = Phi * FAmax / g.As;
+    }
+    const sigA = Math.abs(bendFactor * Phi * (FAmax - FAmin) / (2 * g.As));
     const sigASV = 0.85 * (150 / d + 45);
     const F02 = g.As * bc.Rp;
     const FSm = FMmax + Phi * (FAmax + FAmin) / 2;
@@ -479,6 +530,7 @@
     ck('R8', 'Working stress safety S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub>', SF, '≥ 1.0', SF >= 1.0, false, '', SF);
     if (sigA > 0) ck('R9', 'Fatigue safety S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub>', SD, '≥ ' + SDreq, SD >= SDreq, SD >= 1.0, '', SD);
     for (const p of pressures) ck('R7', 'Surface pressure: ' + p.where, p.p, '≤ ' + fmtN(p.pG, 0) + ' MPa', p.Sp >= 1.0, p.Sp >= 0.9, 'MPa', p.Sp);
+    if (ecc && isFinite(FKA)) ck('R10', 'No one-sided opening: F<sub>KR,min</sub> ≥ F<sub>KA</sub> (eccentric)', FKRmin / 1000, '≥ ' + fmtN(FKA / 1000, 2) + ' kN', FKRmin >= FKA, false, 'kN', FKA > 0 ? FKRmin / FKA : undefined);
     if (pry) {
       const lim = (pry.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + fmtN(pry.fAllow, 0) + ' MPa';
       ck('Pry', 'Flange bending at the web face (prying)', pry.sigWeb, '≤ ' + lim, pry.sigWeb <= pry.fAllow, false, 'MPa', pry.fAllow / pry.sigWeb);
@@ -600,7 +652,7 @@
       thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
       res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, dC, springAlways, deltaS0, deltaS, deltaP, pr },
-      lock, lockKey, lockerUsed, nasa, pat, pry,
+      lock, lockKey, lockerUsed, nasa, pat, pry, ecc, FKA, bendFactor,
       n, PhiK, Phi,
       emb: { fZum, nThread, nBear, nInter, nLockExtra, values: ev, shear }, fZ, FZ, FZ0, springStage, dT, dFth, thLoss, thGain,
       FAmax, FAmin, FQ, muT, qF, SGreq, FKQ, FKextra, FKerf, FPA, FSA, FMerf,

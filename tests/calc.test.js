@@ -238,6 +238,36 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   near(pp.FAmax, 2000 * (1 + pp.pry.ratio), 1e-12, 'prying on the pattern bolt load');
 }
 
+// ---- eccentric clamping and loading ----
+{
+  const base = { FAmax: 6, FQ: 0, plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 15 }] };
+  const con = C.calculate(stateFrom(base));
+  const z = C.calculate(stateFrom(Object.assign({}, base, { eccOn: true, eccC: 60, eccB: 40, eccS: 0, eccA: 0 })));
+  near(z.Phi, con.Phi, 1e-12, 'eccentric s = a = 0 gives the concentric load factor');
+  near(z.FZ, con.FZ, 1e-12, 'eccentric s = 0: embedding loss unchanged');
+  near(z.bendFactor, 1, 1e-12, 'eccentric a = 0, s = 0: no bending factor');
+  ok(z.ecc.FKA === 0, 'centric load: F_KA = 0');
+  const e = z.ecc;
+  near(e.AD, 60 * 40 - Math.PI / 4 * z.dh * z.dh, 1e-12, 'interface area A_D');
+  near(e.IBT, 40 * 60 ** 3 / 12 - Math.PI / 64 * z.dh ** 4, 1e-12, 'interface inertia I_BT');
+  const r = C.calculate(stateFrom(Object.assign({}, base, { eccOn: true, eccC: 60, eccB: 40, eccS: 5, eccA: 12 })));
+  const E = r.ecc;
+  near(E.dPstar, r.res.deltaP + 25 * E.betaP, 1e-12, 'delta_P* = delta_P + s^2 beta_P');
+  near(E.dPss, r.res.deltaP + 60 * E.betaP, 1e-12, 'delta_P** = delta_P + s a beta_P');
+  near(r.Phi, r.n * E.dPss / (r.res.deltaS + E.dPstar), 1e-12, 'Phi_en* formula');
+  ok(r.Phi > con.Phi, 'load beyond the bolt raises the load factor');
+  near(E.FKA, 6000 * (12 * 30 - 5 * 30) / (E.IBT / E.AD + 5 * 30), 1e-9, 'F_KA formula (u = c_T/2)');
+  ok(r.FKerf >= E.FKA, 'F_KA enters the required clamp load');
+  ok(r.bendFactor > 1, 'load further out than the bolt bends the bolt (factor > 1)');
+  ok(r.checks.some(c => /eccentric/.test(c.label)), 'opening check listed');
+  const ov = C.calculate(stateFrom(Object.assign({}, base, { eccOn: true, eccC: 60, eccB: 40, eccS: 5, eccA: 12, eccI: E.IBers * 4 })));
+  ok(!ov.ecc.IBauto && ov.bendFactor < r.bendFactor, 'entered stiffer I_Bers: less bolt bending');
+  const mb = C.calculate(stateFrom(Object.assign({}, base, { eccOn: true, eccC: 60, eccB: 40, eccS: 5, eccA: 12, eccMB: 20 })));
+  ok(mb.ecc.FKA > E.FKA, 'extra bending moment raises F_KA');
+  const bad = C.calculate(stateFrom(Object.assign({}, base, { eccOn: true, eccC: 0 })));
+  ok(bad.issues.some(i => i.level === 'error'), 'missing interface size is an error');
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

@@ -495,7 +495,41 @@
     return out.join('');
   }
 
+  // ---------------- eccentric case: side view of the interface with bolt, load line and opening point ----------------
+  function eccView(r) {
+    const e = r.ecc;
+    if (!e) return '';
+    const id = 'ec' + (++uid);
+    const VW = 460, VH = 330, cx = 230;
+    const sc = 340 / Math.max(e.cT, 2 * Math.abs(e.a) + 10, 1);
+    const X = mm => cx + mm * sc;
+    const yTop = 110, h = Math.min(70, Math.max(30, r.lK * sc * 0.6)), yI = yTop + h;
+    const out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Eccentric clamping and loading">${hatchDefs(id)}`];
+    // upper part and lower part, interface line
+    out.push(`<rect x="${r1(X(-e.cT / 2))}" y="${r1(yTop)}" width="${r1(e.cT * sc)}" height="${r1(h)}" class="layer m-steel"/>`);
+    out.push(`<rect x="${r1(X(-e.cT / 2))}" y="${r1(yI)}" width="${r1(e.cT * sc)}" height="40" class="layer m-aluminium"/><rect x="${r1(X(-e.cT / 2))}" y="${r1(yI)}" width="${r1(e.cT * sc)}" height="40" fill="url(#${id}-h45)" class="hatch-fill"/>`);
+    // symmetric axis
+    out.push(`<line x1="${cx}" y1="${yTop - 40}" x2="${cx}" y2="${yI + 60}" class="pat-axis"/><text x="${cx + 4}" y="${yI + 72}" class="pat-axis-text">axis of the symmetric body</text>`);
+    // bolt
+    const xb = X(e.ssym), bw = Math.max(6, r.g.d * sc), hk = Math.max(6, 0.6 * r.g.d * sc);
+    out.push(`<rect x="${r1(xb - bw / 2)}" y="${r1(yTop - hk)}" width="${r1(bw)}" height="${r1(h + hk + 30)}" class="bolt"/><rect x="${r1(xb - bw * 0.85)}" y="${r1(yTop - hk)}" width="${r1(bw * 1.7)}" height="${r1(hk)}" class="bolt"/>`);
+    // load line F_A
+    const xa = X(e.a), yA = yTop - (Math.abs(xa - xb) < bw * 0.85 + 2 ? hk : 0) - 3;
+    out.push(`<line x1="${r1(xa)}" y1="${r1(yA)}" x2="${r1(xa)}" y2="${r1(yA - 36)}" class="force" marker-end="url(#${id}-arrF)"/><text x="${r1(xa + 6)}" y="${r1(yA - 20)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">A</tspan></text>`);
+    // opening point U
+    const xu = X(e.u);
+    out.push(`<circle cx="${r1(xu)}" cy="${r1(yI)}" r="4" class="pat-bolt crit" style="fill-opacity:.15"/><text x="${r1(xu)}" y="${r1(yI - 8)}" text-anchor="middle" class="lbl">U</text>`);
+    // dimensions from the axis
+    const dimRow = (y, x, label) => Math.abs(x - cx) > 2 ? dimH(y, Math.min(cx, x), Math.max(cx, x), label, id, true) : '';
+    out.push(dimRow(yA - 50, xa, 'a = ' + f(e.a, 1)));
+    out.push(dimRow(yI + 96, xb, 's<tspan baseline-shift="sub" font-size="9">sym</tspan> = ' + f(e.ssym, 1)));
+    out.push(dimRow(yI + 124, xu, 'u = ' + f(e.u, 1)));
+    out.push(`<text x="${VW - 6}" y="${VH - 6}" text-anchor="end" class="lbl">interface c<tspan baseline-shift="sub" font-size="9">T</tspan> × b<tspan baseline-shift="sub" font-size="9">T</tspan> = ${f(e.cT, 0)} × ${f(e.bT, 0)} mm</text>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView };
+  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView };
 })(window);

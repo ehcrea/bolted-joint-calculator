@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=22">
+  <link rel="stylesheet" href="css/style.css?v=25">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -199,6 +199,19 @@
           <label><span class="lt">Flange width per bolt w <span class="tip" tabindex="0" title="Length of flange along the web that one bolt carries (the bolt spacing, or the edge distance at the ends).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryW"></label>
           <label><span class="lt">Flange thickness t <span class="tip" tabindex="0" title="Leave blank to use the thickness of the first clamped part.">ⓘ</span></span> <span class="u">(mm, blank = part 1)</span><input type="number" step="any" min="0" data-key="pryT" placeholder="part 1"></label>
         </div>
+        <label class="check"><input type="checkbox" data-key="eccOn"> Eccentric clamping and loading (VDI 2230) <span class="tip" tabindex="0" title="The bolt is not in the middle of the clamped interface, or the load does not act on the bolt axis. Bending of the parts raises the bolt load factor, bends the bolt and can open the joint on one side. Valid while the joint stays closed.">ⓘ</span></label>
+        <div data-show="ecc">
+          <p class="hint">Distances from the centre of the interface (axis of the symmetric deformation body), positive towards the edge U where the joint would open first.</p>
+          <div class="grid2">
+            <label><span class="lt">Interface length c<sub>T</sub> <span class="tip" tabindex="0" title="Length of the contact area between the parts in the direction of the eccentricity.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="eccC"></label>
+            <label><span class="lt">Interface width b<sub>T</sub> <span class="tip" tabindex="0" title="Width of the contact area at right angles to the eccentricity (for a row of bolts: the bolt spacing).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="eccB"></label>
+            <label><span class="lt">Bolt offset s<sub>sym</sub></span> <span class="u">(mm)</span><input type="number" step="any" data-key="eccS"></label>
+            <label><span class="lt">Load line offset a</span> <span class="u">(mm)</span><input type="number" step="any" data-key="eccA"></label>
+            <label><span class="lt">Opening edge u <span class="tip" tabindex="0" title="Distance from the centre of the interface to the edge where it opens first. Blank = c_T / 2.">ⓘ</span></span> <span class="u">(mm, blank = c<sub>T</sub>/2)</span><input type="number" step="any" min="0" data-key="eccU" placeholder="auto"></label>
+            <label><span class="lt">Bending moment M<sub>B</sub> <span class="tip" tabindex="0" title="Working bending moment at the interface per bolt, in addition to the eccentric axial load (enters the clamp load against opening).">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="eccMB"></label>
+            <label><span class="lt">Bending inertia Ī<sub>Bers</sub> <span class="tip" tabindex="0" title="Substitute moment of inertia of the clamped parts in bending. Blank = estimate from a cylinder with the same axial resilience as δ_P, limited to I_BT of the interface. This estimate is on the low side (more bolt bending); enter a value from FEA or VDI 2230 Part 1 if you have one.">ⓘ</span></span> <span class="u">(mm⁴, blank = auto)</span><input type="number" step="any" min="0" data-key="eccI" placeholder="auto"></label>
+          </div>
+        </div>
         <datalist id="muT-list"></datalist>
       </fieldset>
 
@@ -298,6 +311,13 @@
         <p class="card-note">Half T-stub per bolt: the web pulls with T, the flange edge presses on the support with Q, and the bolt carries B = T + Q. Douty &amp; McGuire elastic formula (Kulak, Fisher &amp; Struik).</p>
         <div class="drawing" id="pry-view"></div>
         <div class="metrics" id="pry-metrics"></div>
+      </div>
+
+      <div class="card" id="ecc-card" hidden>
+        <div class="card-head"><h2>Eccentric clamping and loading</h2><span class="badge" id="ecc-badge"></span></div>
+        <p class="card-note">VDI 2230 Part 1 eccentric case: bending of the clamped parts changes the load factor (Φ<sub>en</sub>*), adds bending stress in the bolt and needs a clamp load F<sub>KA</sub> against one-sided opening.</p>
+        <div class="drawing" id="ecc-view"></div>
+        <div class="metrics" id="ecc-metrics"></div>
       </div>
 
       <div class="card">
@@ -422,6 +442,16 @@
     </ul>
     <p class="about-meta">The formula is elastic and assumes a flange that does not yield. Steel construction codes (e.g. AISC, EN 1993-1-8 T-stub) use plastic models with other limits. Reduce prying with a thicker flange, bolts closer to the web, or stiffeners.</p>
 
+    <h3 id="help-ecc">Eccentric clamping and loading</h3>
+    <p>Many joints are not symmetric: the bolt sits off the centre of the contact face (eccentric clamping, offset s<sub>sym</sub>), or the load acts beside the bolt (eccentric loading, offset a), for example on a bracket or a cover flange. The parts then bend as well as compress. Tick <b>Eccentric clamping and loading</b> in section 5 and enter the size of the contact face c<sub>T</sub> × b<sub>T</sub> and the offsets, measured from the centre of the contact face, positive towards the edge U where it would open first.</p>
+    <ul>
+      <li><b>Load factor:</b> the bending resilience of the parts β<sub>P</sub> = l<sub>K</sub>/(E<sub>P</sub>·Ī<sub>Bers</sub>) gives δ<sub>P</sub>* = δ<sub>P</sub> + s<sub>sym</sub>²·β<sub>P</sub> and δ<sub>P</sub>** = δ<sub>P</sub> + s<sub>sym</sub>·a·β<sub>P</sub>, and Φ<sub>en</sub>* = n·δ<sub>P</sub>**/(δ<sub>S</sub> + δ<sub>P</sub>*). A load further out than the bolt (a &gt; s<sub>sym</sub>) raises the load factor, often several times.</li>
+      <li><b>One-sided opening:</b> the joint lifts at U unless the residual clamp load is at least F<sub>KA</sub> = (F<sub>A</sub>·(a − s<sub>sym</sub>)·u + M<sub>B</sub>·u)/(I<sub>BT</sub>/A<sub>D</sub> + s<sub>sym</sub>·u). F<sub>KA</sub> enters the required clamp load and has its own check in R10.</li>
+      <li><b>Bolt bending:</b> the bending of the parts also bends the bolt. The alternating stress in R9 is multiplied by 1 + (a/Φ<sub>en</sub>* − s<sub>sym</sub>)·(l<sub>K</sub>/l<sub>ers</sub>)·(E<sub>S</sub>/E<sub>P</sub>)·π·d<sub>S</sub>³/(8·Ī<sub>Bers</sub>).</li>
+      <li><b>Ī<sub>Bers</sub></b>, the bending inertia of the clamped parts, is estimated from a cylinder with the same axial resilience as δ<sub>P</sub>, limited to I<sub>BT</sub> of the contact face. This tends to be low, so bolt bending comes out on the safe side; enter a better value (FEA, or the deformation-body formulas of VDI 2230 Part 1) when you have one.</li>
+    </ul>
+    <p class="about-meta">Valid only while the joint stays closed. Once it opens on one side, the bolt load rises steeply and non-linearly (VDI 2230 treats this separately); redesign so that it stays closed. The formulas follow VDI 2230 Part 1 (2015) in simplified form and should be checked against the guideline for critical joints. Do not combine with prying: both describe the same bending flange.</p>
+
     <h3 id="help-nasa">Aerospace check (NASA-STD-5020)</h3>
     <p>Spaceflight hardware for NASA follows NASA-STD-5020 (threaded fastening systems); ESA uses ECSS-E-HB-32-23A. Tick <b>Also check to NASA-STD-5020</b> in section 6 to run it next to VDI 2230 on the same joint. The main differences:</p>
     <ul>
@@ -469,10 +499,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=22"></script>
-  <script src="js/calc.js?v=22"></script>
-  <script src="js/presets.js?v=22"></script>
-  <script src="js/drawing.js?v=22"></script>
-  <script src="js/app.js?v=22"></script>
+  <script src="js/data.js?v=25"></script>
+  <script src="js/calc.js?v=25"></script>
+  <script src="js/presets.js?v=25"></script>
+  <script src="js/drawing.js?v=25"></script>
+  <script src="js/app.js?v=25"></script>
 </body>
 </html>
