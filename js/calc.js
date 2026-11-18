@@ -163,6 +163,37 @@
     const holeIdx = { fine: 0, medium: 1, coarse: 2 }[inp.holeFit] ?? 1;
     const dh = inp.holeFit === 'custom' && inp.dhCustom > d ? +inp.dhCustom : sz.hole[holeIdx];
     const nut = sz.hex; // ISO 4032 nut
+
+    // ---- prying of a T-stub or angle flange (Douty & McGuire elastic formula, as in Kulak, Fisher & Struik) ----
+    //   Q/T = (1/2 − w·t⁴/(30·a·b²·A_b)) / ((a/b)·(a/(3b) + 1) + w·t⁴/(6·a·b²·A_b)),   a ≤ 1.25·b
+    // a: bolt to flange edge (prying contact), b: bolt to web face / bend line, w: flange width per bolt, t: flange thickness.
+    // The prying force adds to the external axial load on the bolt (as in ECSS-E-HB-32-23A).
+    let pry = null;
+    if (inp.pryOn) {
+      const firstPlateMat = D.MATERIALS[(inp.plates && inp.plates[0] && inp.plates[0].mat) || 'S235'] || D.MATERIALS.S235;
+      const t = +inp.pryT > 0 ? +inp.pryT : Math.max(0, +(inp.plates && inp.plates[0] && inp.plates[0].t) || 0);
+      const a = Math.max(0, +inp.pryA || 0), b = Math.max(0, +inp.pryB || 0), w = Math.max(0, +inp.pryW || 0);
+      if (a <= 0 || b <= 0 || w <= 0 || t <= 0) add('error', 'Prying: enter the edge distance a, the distance to the web b, the flange width per bolt w and the flange thickness t.');
+      else {
+        const aEff = Math.min(a, 1.25 * b);
+        const Ab = g.As;
+        const X = w * Math.pow(t, 4) / (aEff * b * b * Ab);
+        const raw = (0.5 - X / 30) / ((aEff / b) * (aEff / (3 * b) + 1) + X / 6);
+        const ratio = Math.max(0, raw);
+        const T = (+inp.FAmax || 0) * 1000, Q = ratio * T;
+        const Mbolt = Q * aEff, Mweb = Math.abs(T * b - Q * aEff);
+        const wNet = Math.max(1e-6, w - dh);
+        const sigBolt = 6 * Mbolt / (wNet * t * t), sigWeb = 6 * Mweb / (w * t * t);
+        const brittle = firstPlateMat.Rp === null || firstPlateMat.Rp === undefined;
+        const fAllow = brittle ? firstPlateMat.Rm : firstPlateMat.Rp;
+        pry = { a, aEff, b, w, t, Ab, X, raw, ratio, T, Q, Mbolt, Mweb, wNet, sigBolt, sigWeb, mat: firstPlateMat, fAllow, brittle };
+        inp = Object.assign({}, inp, { FAmax: (+inp.FAmax || 0) * (1 + ratio), FAmin: (+inp.FAmin || 0) * (1 + ratio) });
+        if (a > 1.25 * b) add('info', 'Prying: the edge distance a is limited to 1.25·b = ' + fmtN(1.25 * b, 1) + ' mm, as is usual for the prying formula (a longer edge does not reduce prying further).');
+        if (ratio > 0) add('info', 'Prying raises the axial load on the bolt by ' + fmtN(ratio * 100, 0) + ' % (Q = ' + fmtN(Q / 1000, 2) + ' kN on T = ' + fmtN(T / 1000, 2) + ' kN). A thicker flange or a bolt closer to the web reduces it.');
+        else add('info', 'Prying: the flange is stiff enough that no prying force develops (Q = 0).');
+        if (brittle) add('warn', 'Prying: the flange material (' + firstPlateMat.label + ') is brittle; flange bending is checked against R<sub>m</sub>. Avoid prying in cast iron flanges.');
+      }
+    }
     const fr = D.FRICTION[inp.friction] || D.FRICTION['oxide-oil'];
     const muGmin = fr.custom ? +inp.muGmin : fr.muG[0];
     const muGmax = fr.custom ? +inp.muGmax : fr.muG[1];
@@ -448,6 +479,11 @@
     ck('R8', 'Working stress safety S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub>', SF, '≥ 1.0', SF >= 1.0, false, '', SF);
     if (sigA > 0) ck('R9', 'Fatigue safety S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub>', SD, '≥ ' + SDreq, SD >= SDreq, SD >= 1.0, '', SD);
     for (const p of pressures) ck('R7', 'Surface pressure: ' + p.where, p.p, '≤ ' + fmtN(p.pG, 0) + ' MPa', p.Sp >= 1.0, p.Sp >= 0.9, 'MPa', p.Sp);
+    if (pry) {
+      const lim = (pry.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + fmtN(pry.fAllow, 0) + ' MPa';
+      ck('Pry', 'Flange bending at the web face (prying)', pry.sigWeb, '≤ ' + lim, pry.sigWeb <= pry.fAllow, false, 'MPa', pry.fAllow / pry.sigWeb);
+      if (pry.Q > 0) ck('Pry', 'Flange bending at the bolt line, net section (prying)', pry.sigBolt, '≤ ' + lim, pry.sigBolt <= pry.fAllow, false, 'MPa', pry.fAllow / pry.sigBolt);
+    }
     ck('R13', 'Thread stripping: weakest thread ≥ bolt breaking load', weakest.F / 1000, '≥ ' + fmtN(Fbreak / 1000, 1) + ' kN', weakest.F >= Fbreak, weakest.F >= FSmax, 'kN', weakest.F / Fbreak);
 
     // ---------------- issues ----------------
@@ -564,7 +600,7 @@
       thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
       res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, dC, springAlways, deltaS0, deltaS, deltaP, pr },
-      lock, lockKey, lockerUsed, nasa, pat,
+      lock, lockKey, lockerUsed, nasa, pat, pry,
       n, PhiK, Phi,
       emb: { fZum, nThread, nBear, nInter, nLockExtra, values: ev, shear }, fZ, FZ, FZ0, springStage, dT, dFth, thLoss, thGain,
       FAmax, FAmin, FQ, muT, qF, SGreq, FKQ, FKextra, FKerf, FPA, FSA, FMerf,

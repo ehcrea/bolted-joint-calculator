@@ -19,6 +19,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Thread stripping and engagement length** for a nut, a tapped hole, a **Heli-Coil** (wire thread insert, STI hole) or a **solid threaded insert**: strength of each thread against the bolt breaking load and the engagement length needed for the bolt to break first
 - **Bolt length** from clamp length and engagement, rounded to a standard length
 - **Bolt patterns**: circular or rectangular patterns with forces and moments on the flange; rigid-flange load distribution (centroid model for closed joints, heel model for opened joints), plan view with the tension and shear on each bolt, and the most loaded bolt checked with all the methods above
+- **Prying** of T-stub and angle flanges: Douty & McGuire prying ratio, prying force added to the bolt load, flange bending checks at the web face and the bolt line
 - **Aerospace check (NASA-STD-5020)**, optional: preload range from the torque range and the preload uncertainty Γ, relaxation, running torque of locking features, factors of safety and fitting factor, and margins of safety for separation, slip, yield, ultimate tension, thread shear-out, bolt shear and tension–shear interaction
 - **Locking elements** under the head: split lock washer (DIN 127, flagged as ineffective), conical spring washer (DIN 6796, modelled as a spring that recovers settling once below its flat load), wedge-locking washer pair (DIN 25201), and thread-locking adhesive with its own friction ranges
 - **Clamp length ratio** l<sub>K</sub>/d with the share of preload lost to settling: a note below 3 (the common design rule, e.g. in semiconductor equipment) and a warning below 1
@@ -33,7 +34,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 
 ## Examples
 
-20 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
+21 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
 
 ## Libraries
 
@@ -41,7 +42,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 |---|---|
 | Threads | ISO 261 metric coarse M2 to M36 and fine threads, with ISO 4017 / 4032 hex and ISO 4762 socket head dimensions, ISO 273 clearance holes and ISO 7089 / 7093 washers |
 | Property classes | 4.6, 5.6, 5.8, 8.8, 10.9, 12.9 (ISO 898-1), A2/A4-50, -70, -80 (ISO 3506-1), titanium grade 5 |
-| Materials | Structural and quenched-and-tempered steels, stainless steels, grey and ductile cast iron, aluminium alloys (wrought and die-cast), magnesium, titanium, brass, POM, PA6-GF30 and FR-4 circuit boards (through-thickness values): E, α, R<sub>m</sub>, p<sub>G</sub>, shear strength |
+| Materials | Structural and quenched-and-tempered steels, stainless steels, grey and ductile cast iron, aluminium alloys (wrought and die-cast), magnesium, titanium, brass, POM, PA6-GF30 and FR-4 circuit boards (through-thickness values): E, α, R<sub>m</sub>, R<sub>p</sub>, p<sub>G</sub>, shear strength |
 | Friction | Oiled black oxide, zinc plated, zinc flake, MoS₂, stainless dry and with paste, aluminium parts, titanium, thread-locker on steel and stainless (VDI 2230 table A5, ISO 16047 coating ranges) |
 | Locking elements | Split lock washers, conical spring washers (size, free height, flat load), wedge-locking washer pairs: typical catalogue values |
 | Tightening | Yield- and angle-controlled, ultrasonic, hydraulic tensioner, torque wrench, power tool, impact wrench (VDI 2230 table A8) |
@@ -50,7 +51,7 @@ Values marked ~ are typical estimates and not from VDI 2230: check them against 
 
 ## Scope and limits of this draft
 
-- Single bolt with a **concentric** axial load. Bolt patterns use a rigid-flange load distribution; eccentric loading of one bolt, prying and flange bending are not covered yet
+- Single bolt with a **concentric** axial load. Bolt patterns use a rigid-flange load distribution; prying uses an elastic T-stub formula; eccentric loading of one bolt and flexible-flange load sharing are not covered yet
 - Clamped parts of different materials are combined with one series modulus in the cone model (VDI 2230 treats each layer separately)
 - The compliance of a soft material around a threaded insert is not included in the bolt resilience
 - Thread stripping uses the ISO basic profile shear areas with simplified reduction factors
@@ -89,7 +90,7 @@ The tests check the stress areas against ISO 898-1, the permissible preload agai
 ## Roadmap
 
 - Translations (DE, NL, TR, ES) and inch units / UNC-UNF threads, like the other ehcrea tools
-- Eccentric load and prying (VDI 2230 Part 1 eccentric case), flexible flanges, custom bolt positions
+- Eccentric load (VDI 2230 Part 1 eccentric case), plastic T-stub models (EN 1993-1-8, AISC), flexible flanges, custom bolt positions
 - Per-layer cone model, countersunk and flange heads, reduced-shank (waisted) bolts
 - Heat-set and press-in inserts for plastics and 3D prints, self-tapping screws in plastics
 - PDF report, unit converter, SEO language pages and social image
@@ -99,6 +100,7 @@ The tests check the stress areas against ISO 898-1, the permissible preload agai
 - VDI 2230 Blatt 1:2015, *Systematic calculation of highly stressed bolted joints: joints with one cylindrical bolt*
 - ISO 898-1, ISO 3506-1, ISO 261, ISO 724, ISO 273, ISO 4017, ISO 4032, ISO 4762, ISO 7089, ISO 7093-1, ISO 16047
 - DIN 8140 (wire thread inserts), FED-STD-H28/2B (thread shear areas)
+- G. L. Kulak, J. W. Fisher, J. H. A. Struik, *Guide to Design Criteria for Bolted and Riveted Joints* (prying, Douty & McGuire)
 - NASA-STD-5020B, *Requirements for Threaded Fastening Systems in Spaceflight Hardware*; ECSS-E-HB-32-23A, *Threaded fasteners handbook*; NASA RP-1228, *Fastener Design Manual*
 - DIN 127 (withdrawn), DIN 6796, DIN 25201, DIN 65151 / ISO 16130 (Junker test), ISO 10964 and ASTM D5363 / MIL-S-22473 (anaerobic thread-lockers)
 - J. H. Bickford, *Introduction to the Design and Behavior of Bolted Joints*

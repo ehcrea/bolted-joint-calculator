@@ -15,6 +15,7 @@
     patOn: false, patType: 'circle', patMethod: 'centroid', patN: 6, patPCD: 100, patAngle: 90, patDf: 130,
     patNx: 2, patNy: 2, patSx: 80, patSy: 60, patPerimeter: true, patLx: 110, patLy: 90,
     patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0,
+    pryOn: false, pryA: 30, pryB: 25, pryW: 60, pryT: '',
   };
 
   const PRESETS = [
@@ -94,6 +95,10 @@
       nu: 0.9, muT: 0.15, n: 0.5,
       patOn: true, patType: 'rect', patNx: 2, patNy: 2, patSx: 60, patSy: 40, patLx: 80, patLy: 60,
       patFy: -1.2, patMx: -100, patR: 0 } },
+    { id: 'pry-angle', label: 'M10 8.8 hanger: 10 mm angle leg in tension with prying', s: {
+      joint: 'nut', thread: 'M10', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '200HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 15 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FAmax: 8, FAmin: 0, FQ: 0, n: 0.5, pryOn: true, pryA: 30, pryB: 25, pryW: 60 } },
   ];
   // List from the smallest bolt to the largest (stable sort: same size keeps the order above).
   const size = p => parseFloat(String(p.s.thread || DEFAULT.thread).replace(/^M/, ''));

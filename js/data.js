@@ -60,30 +60,31 @@
   };
 
   // Materials of clamped parts and tapped parts.
-  // E MPa, alpha 1/K, Rm MPa, pG limiting surface pressure MPa (VDI 2230 table A9 where available),
+  // E MPa, alpha 1/K, Rm MPa, Rp yield / 0.2 % proof strength MPa (minimum or typical; null = brittle, no yield),
+  // pG limiting surface pressure MPa (VDI 2230 table A9 where available),
   // ftau = tauB / Rm (shear strength ratio for thread stripping).
   const MATERIALS = {
-    'S235':     { label: 'Steel S235JR',                  group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 360,  pG: 490,  ftau: 0.6 },
-    'E295':     { label: 'Steel E295',                    group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 470,  pG: 710,  ftau: 0.6 },
-    'C45':      { label: 'Steel C45 (normalised)',        group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 700,  pG: 770,  ftau: 0.6 },
-    '42CrMo4':  { label: 'Steel 42CrMo4 (QT)',            group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 1000, pG: 850,  ftau: 0.6 },
-    '1.4301':   { label: 'Stainless 1.4301 (304)',        group: 'Stainless', E: 200000, alpha: 16e-6,   Rm: 520,  pG: 630,  ftau: 0.65 },
-    '1.4404':   { label: 'Stainless 1.4404 (316L)',       group: 'Stainless', E: 200000, alpha: 16e-6,   Rm: 500,  pG: 600,  ftau: 0.65, est: true },
-    'GJL250':   { label: 'Grey cast iron EN-GJL-250',     group: 'Cast iron', E: 110000, alpha: 10e-6,   Rm: 250,  pG: 850,  ftau: 1.15 },
-    'GJS400':   { label: 'Ductile iron EN-GJS-400-15',    group: 'Cast iron', E: 169000, alpha: 12.5e-6, Rm: 400,  pG: 600,  ftau: 0.9 },
-    '6082T6':   { label: 'Aluminium EN AW-6082-T6',       group: 'Aluminium', E: 70000,  alpha: 23.4e-6, Rm: 310,  pG: 360,  ftau: 0.6 },
-    '6061T6':   { label: 'Aluminium EN AW-6061-T6',       group: 'Aluminium', E: 69000,  alpha: 23.6e-6, Rm: 290,  pG: 340,  ftau: 0.6, est: true },
-    '7075T6':   { label: 'Aluminium EN AW-7075-T6',       group: 'Aluminium', E: 71000,  alpha: 23.4e-6, Rm: 540,  pG: 550,  ftau: 0.6 },
-    '5083':     { label: 'Aluminium EN AW-5083-H111',     group: 'Aluminium', E: 71000,  alpha: 24e-6,   Rm: 275,  pG: 230,  ftau: 0.6 },
-    'AlSi9Cu3': { label: 'Die-cast Al EN AC-46000',       group: 'Aluminium', E: 75000,  alpha: 21e-6,   Rm: 240,  pG: 220,  ftau: 0.6 },
-    'AZ91':     { label: 'Magnesium AZ91 (die cast)',     group: 'Magnesium', E: 45000,  alpha: 26e-6,   Rm: 240,  pG: 220,  ftau: 0.55, est: true },
-    'Ti64':     { label: 'Titanium Ti-6Al-4V',            group: 'Titanium',  E: 114000, alpha: 9e-6,    Rm: 950,  pG: 1000, ftau: 0.6, est: true },
-    'CuZn39':   { label: 'Brass CuZn39Pb3',               group: 'Copper',    E: 96000,  alpha: 20e-6,   Rm: 430,  pG: 400,  ftau: 0.6, est: true },
-    'POM':      { label: 'POM-C (acetal)',                group: 'Polymer',   E: 2800,   alpha: 110e-6,  Rm: 65,   pG: 60,   ftau: 0.8, est: true, polymer: true },
-    'PA6GF30':  { label: 'PA6-GF30 (conditioned)',        group: 'Polymer',   E: 6500,   alpha: 30e-6,   Rm: 110,  pG: 90,   ftau: 0.6, est: true, polymer: true },
+    'S235':     { label: 'Steel S235JR',                  group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 360, Rp: 235,  pG: 490,  ftau: 0.6 },
+    'E295':     { label: 'Steel E295',                    group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 470, Rp: 295,  pG: 710,  ftau: 0.6 },
+    'C45':      { label: 'Steel C45 (normalised)',        group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 700, Rp: 340,  pG: 770,  ftau: 0.6 },
+    '42CrMo4':  { label: 'Steel 42CrMo4 (QT)',            group: 'Steel',     E: 210000, alpha: 11.5e-6, Rm: 1000, Rp: 750, pG: 850,  ftau: 0.6 },
+    '1.4301':   { label: 'Stainless 1.4301 (304)',        group: 'Stainless', E: 200000, alpha: 16e-6,   Rm: 520, Rp: 210,  pG: 630,  ftau: 0.65 },
+    '1.4404':   { label: 'Stainless 1.4404 (316L)',       group: 'Stainless', E: 200000, alpha: 16e-6,   Rm: 500, Rp: 200,  pG: 600,  ftau: 0.65, est: true },
+    'GJL250':   { label: 'Grey cast iron EN-GJL-250',     group: 'Cast iron', E: 110000, alpha: 10e-6,   Rm: 250, Rp: null,  pG: 850,  ftau: 1.15 },
+    'GJS400':   { label: 'Ductile iron EN-GJS-400-15',    group: 'Cast iron', E: 169000, alpha: 12.5e-6, Rm: 400, Rp: 250,  pG: 600,  ftau: 0.9 },
+    '6082T6':   { label: 'Aluminium EN AW-6082-T6',       group: 'Aluminium', E: 70000,  alpha: 23.4e-6, Rm: 310, Rp: 260,  pG: 360,  ftau: 0.6 },
+    '6061T6':   { label: 'Aluminium EN AW-6061-T6',       group: 'Aluminium', E: 69000,  alpha: 23.6e-6, Rm: 290, Rp: 240,  pG: 340,  ftau: 0.6, est: true },
+    '7075T6':   { label: 'Aluminium EN AW-7075-T6',       group: 'Aluminium', E: 71000,  alpha: 23.4e-6, Rm: 540, Rp: 470,  pG: 550,  ftau: 0.6 },
+    '5083':     { label: 'Aluminium EN AW-5083-H111',     group: 'Aluminium', E: 71000,  alpha: 24e-6,   Rm: 275, Rp: 125,  pG: 230,  ftau: 0.6 },
+    'AlSi9Cu3': { label: 'Die-cast Al EN AC-46000',       group: 'Aluminium', E: 75000,  alpha: 21e-6,   Rm: 240, Rp: 140,  pG: 220,  ftau: 0.6 },
+    'AZ91':     { label: 'Magnesium AZ91 (die cast)',     group: 'Magnesium', E: 45000,  alpha: 26e-6,   Rm: 240, Rp: 150,  pG: 220,  ftau: 0.55, est: true },
+    'Ti64':     { label: 'Titanium Ti-6Al-4V',            group: 'Titanium',  E: 114000, alpha: 9e-6,    Rm: 950, Rp: 830,  pG: 1000, ftau: 0.6, est: true },
+    'CuZn39':   { label: 'Brass CuZn39Pb3',               group: 'Copper',    E: 96000,  alpha: 20e-6,   Rm: 430, Rp: 250,  pG: 400,  ftau: 0.6, est: true },
+    'POM':      { label: 'POM-C (acetal)',                group: 'Polymer',   E: 2800,   alpha: 110e-6,  Rm: 65, Rp: 65,   pG: 60,   ftau: 0.8, est: true, polymer: true },
+    'PA6GF30':  { label: 'PA6-GF30 (conditioned)',        group: 'Polymer',   E: 6500,   alpha: 30e-6,   Rm: 110, Rp: 100,  pG: 90,   ftau: 0.6, est: true, polymer: true },
     // FR-4 printed circuit board, values through the thickness (z): E_z and z-CTE below Tg. No pG standard exists;
     // 100 MPa is a conservative estimate (flatwise compressive strength ~400 MPa) to limit creep of laminate and solder mask.
-    'FR4':      { label: 'PCB FR-4 (through thickness)',  group: 'PCB',       E: 10000,  alpha: 60e-6,   Rm: 310,  pG: 100,  ftau: 0.15, est: true, pcb: true },
+    'FR4':      { label: 'PCB FR-4 (through thickness)',  group: 'PCB',       E: 10000,  alpha: 60e-6,   Rm: 310, Rp: null,  pG: 100,  ftau: 0.15, est: true, pcb: true },
   };
 
   // Washer hardness classes: limiting surface pressure on the washer itself (estimate from hardness).

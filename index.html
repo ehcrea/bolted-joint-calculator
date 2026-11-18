@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=22">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -192,6 +192,13 @@
           <label><span class="lt">Temperature change ΔT <span class="tip" tabindex="0" title="Operating temperature minus assembly temperature. With different expansion coefficients of bolt and parts the preload changes.">ⓘ</span></span> <span class="u">(K)</span><input type="number" step="any" data-key="dT"></label>
           <label><span class="lt">Load introduction n <span class="tip" tabindex="0" title="Where the axial load enters the clamped parts: 1 = under the head and nut (stiff bolt load), 0.5 = middle of the parts (typical), smaller = near the interface. Reduces the share of the load the bolt sees.">ⓘ</span></span><input type="number" step="0.05" min="0" max="1" data-key="n"></label>
         </div>
+        <label class="check"><input type="checkbox" data-key="pryOn"> Flange prying (T-stub or angle bracket) <span class="tip" tabindex="0" title="A flange pulled by a web or an angle leg bends, presses its outer edge on the support and levers extra force Q onto the bolt. Douty and McGuire elastic formula; the prying force is added to the axial load of the bolt. The first clamped part is the flange.">ⓘ</span></label>
+        <div class="grid2" data-show="pry">
+          <label><span class="lt">Bolt to web face b <span class="tip" tabindex="0" title="Distance from the bolt centre line to the face of the web (T-stub) or the bend line of the angle leg.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryB"></label>
+          <label><span class="lt">Bolt to flange edge a <span class="tip" tabindex="0" title="Distance from the bolt centre line to the outer edge of the flange, where the prying force acts. Limited to 1.25·b.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryA"></label>
+          <label><span class="lt">Flange width per bolt w <span class="tip" tabindex="0" title="Length of flange along the web that one bolt carries (the bolt spacing, or the edge distance at the ends).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryW"></label>
+          <label><span class="lt">Flange thickness t <span class="tip" tabindex="0" title="Leave blank to use the thickness of the first clamped part.">ⓘ</span></span> <span class="u">(mm, blank = part 1)</span><input type="number" step="any" min="0" data-key="pryT" placeholder="part 1"></label>
+        </div>
         <datalist id="muT-list"></datalist>
       </fieldset>
 
@@ -284,6 +291,13 @@
         <p class="card-note">Rigid-flange (bolt group) model: tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.</p>
         <div class="drawing" id="pat-view"></div>
         <div class="table-wrap"><table class="data" id="pat-table"></table></div>
+      </div>
+
+      <div class="card" id="pry-card" hidden>
+        <div class="card-head"><h2>Flange prying</h2><span class="badge" id="pry-badge"></span></div>
+        <p class="card-note">Half T-stub per bolt: the web pulls with T, the flange edge presses on the support with Q, and the bolt carries B = T + Q. Douty &amp; McGuire elastic formula (Kulak, Fisher &amp; Struik).</p>
+        <div class="drawing" id="pry-view"></div>
+        <div class="metrics" id="pry-metrics"></div>
       </div>
 
       <div class="card">
@@ -399,6 +413,15 @@
     </ul>
     <p class="about-meta">Not included: flange bending and prying forces, unequal bolt stiffness, and the eccentric loading and clamping inside one bolt (VDI 2230 Part 1 eccentric case). For flexible flanges these can raise the bolt load considerably.</p>
 
+    <h3 id="help-pry">Prying</h3>
+    <p>When a web or an angle leg pulls on a flange, the flange bends, its outer edge presses on the support, and it levers an extra force Q onto the bolt: the bolt carries B = T + Q. Tick <b>Flange prying</b> in section 5 and enter, per bolt, the distance to the web face b, the distance to the flange edge a, the flange width per bolt w and the flange thickness t.</p>
+    <ul>
+      <li><b>Prying ratio</b> (Douty &amp; McGuire elastic formula, in Kulak, Fisher &amp; Struik): Q/T = (½ − X/30) / ((a/b)·(a/3b + 1) + X/6) with X = w·t⁴/(a·b²·A<sub>b</sub>). A thick flange (X above 15) does not pry; a is limited to 1.25·b.</li>
+      <li>The prying force is <b>added to the axial load of the bolt</b> (as in ECSS-E-HB-32-23A), so all checks, including fatigue and NASA-STD-5020, see it. With a bolt pattern it acts on the most loaded bolt.</li>
+      <li><b>Flange bending</b> is checked at the web face (|T·b − Q·a|) and at the bolt line (Q·a, net width w − d<sub>h</sub>) against the yield strength of the first clamped part.</li>
+    </ul>
+    <p class="about-meta">The formula is elastic and assumes a flange that does not yield. Steel construction codes (e.g. AISC, EN 1993-1-8 T-stub) use plastic models with other limits. Reduce prying with a thicker flange, bolts closer to the web, or stiffeners.</p>
+
     <h3 id="help-nasa">Aerospace check (NASA-STD-5020)</h3>
     <p>Spaceflight hardware for NASA follows NASA-STD-5020 (threaded fastening systems); ESA uses ECSS-E-HB-32-23A. Tick <b>Also check to NASA-STD-5020</b> in section 6 to run it next to VDI 2230 on the same joint. The main differences:</p>
     <ul>
@@ -446,10 +469,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=20"></script>
-  <script src="js/calc.js?v=20"></script>
-  <script src="js/presets.js?v=20"></script>
-  <script src="js/drawing.js?v=20"></script>
-  <script src="js/app.js?v=20"></script>
+  <script src="js/data.js?v=22"></script>
+  <script src="js/calc.js?v=22"></script>
+  <script src="js/presets.js?v=22"></script>
+  <script src="js/drawing.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 </body>
 </html>

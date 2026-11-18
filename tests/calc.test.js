@@ -217,6 +217,27 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(r.pat && r.pat.n === 6, 'pattern returned with the result');
 }
 
+// ---- prying (Douty & McGuire) ----
+{
+  const base = { FAmax: 8, FQ: 0, plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 12 }], pryOn: true, pryA: 30, pryB: 25, pryW: 60 };
+  const r = C.calculate(stateFrom(base)), p = r.pry;
+  const As = r.g.As, X = 60 * Math.pow(10, 4) / (30 * 625 * As);
+  near(p.ratio, (0.5 - X / 30) / ((30 / 25) * (30 / 75 + 1) + X / 6), 1e-12, 'Q/T by hand');
+  near(r.FAmax, 8000 * (1 + p.ratio), 1e-12, 'prying added to the bolt axial load');
+  near(p.sigWeb, 6 * Math.abs(8000 * 25 - p.Q * 30) / (60 * 100), 1e-12, 'flange bending at the web face');
+  ok(r.checks.some(c => /web face/.test(c.label)), 'flange bending check listed');
+  const thick = C.calculate(stateFrom(Object.assign({}, base, { pryT: 30 }))).pry;
+  const thin = C.calculate(stateFrom(Object.assign({}, base, { pryT: 6 }))).pry;
+  ok(thick.ratio === 0 && thin.ratio > p.ratio, 'thicker flange: less prying, none when very stiff');
+  const longA = C.calculate(stateFrom(Object.assign({}, base, { pryA: 80 }))).pry;
+  ok(longA.aEff === 1.25 * 25, 'edge distance limited to 1.25 b');
+  const thinFail = C.calculate(stateFrom(Object.assign({}, base, { pryT: 5 })));
+  ok(thinFail.checks.some(c => /web face/.test(c.label) && c.status === 'error'), 'thin flange fails in bending');
+  // with a pattern: prying acts on the most loaded bolt
+  const pp = C.calculate(stateFrom(Object.assign({}, base, { patOn: true, patType: 'rect', patNx: 2, patNy: 2, patSx: 60, patSy: 40, patFz: 8 })));
+  near(pp.FAmax, 2000 * (1 + pp.pry.ratio), 1e-12, 'prying on the pattern bolt load');
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

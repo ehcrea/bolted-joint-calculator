@@ -154,6 +154,7 @@
       helicoil: state.joint === 'helicoil', insert: state.joint === 'insert',
       'mode-nu': state.mode !== 'torque', 'mode-torque': state.mode === 'torque',
       nasa: !!state.nasa,
+      pry: !!state.pryOn,
       pat: !!state.patOn, 'no-pat': !state.patOn,
       'pat-circle': state.patType !== 'rect', 'pat-rect': state.patType === 'rect',
     };
@@ -216,6 +217,7 @@
       ['#section', '#diagram', '#thread-detail', '#friction-chart', '#torque-bar', '#steps', '#checks', '#strip', '#diag-metrics', '#thread-metrics'].forEach(s => { $(s).innerHTML = ''; });
       $('#nasa-card').hidden = true;
       $('#pat-card').hidden = true;
+      $('#pry-card').hidden = true;
       return;
     }
     hero.classList.remove('invalid');
@@ -255,6 +257,7 @@
     $('#torque-bar').innerHTML = DR.torqueBar(r);
     renderChecks(r);
     renderPattern(r);
+    renderPry(r);
     renderNasa(r);
     renderStrip(r);
     $('#steps').innerHTML = steps(r);
@@ -286,6 +289,22 @@
     const head = '<thead><tr><th class="left">Step</th><th class="left">Check</th><th>Value</th><th>Limit</th><th>Safety</th><th>Status</th></tr></thead>';
     const rows = r.checks.map(c => `<tr><td class="left">${c.id}</td><td class="left">${c.label}</td><td class="strong">${fmtVal(c.value, c.unit)}</td><td>${c.limit}</td><td>${c.safety !== undefined ? f(c.safety, 2) : ''}</td><td><span class="status ${c.status}">${{ ok: '✓ OK', warn: '! Check', error: '✕ Fail' }[c.status]}</span></td></tr>`).join('');
     $('#checks').innerHTML = head + '<tbody>' + rows + '</tbody>';
+  }
+  function renderPry(r) {
+    const card = $('#pry-card'), p = r.pry;
+    card.hidden = !p;
+    if (!p) return;
+    $('#pry-view').innerHTML = DR.pryView(r);
+    $('#pry-badge').textContent = p.ratio > 0 ? '+' + f(p.ratio * 100, 0) + ' % bolt load' : 'no prying';
+    const st = (sig) => sig <= p.fAllow ? '' : '<span class="status error">above ' + (p.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + '</span>';
+    $('#pry-metrics').innerHTML = metrics([
+      ['Prying ratio Q/T', f(p.ratio, 3), p.raw < 0 ? 'flange stiff enough (formula < 0)' : ''],
+      ['Prying force Q', f(p.Q / 1000, 2) + ' kN', 'on T = ' + f(p.T / 1000, 2) + ' kN'],
+      ['Bolt load B = T + Q', f((p.T + p.Q) / 1000, 2) + ' kN', 'used as F<sub>A,max</sub>'],
+      ['Stiffness term w·t⁴/(a·b²·A<sub>b</sub>)', f(p.X, 2), 'prying ends above 15'],
+      ['Flange bending, web face', f(p.sigWeb, 0) + ' MPa', (st(p.sigWeb) || '≤ ' + f(p.fAllow, 0) + ' MPa')],
+      ['Flange bending, bolt line', f(p.sigBolt, 0) + ' MPa', (st(p.sigBolt) || 'net width ' + f(p.wNet, 1) + ' mm')],
+    ]);
   }
   function renderPattern(r) {
     const card = $('#pat-card'), P = r.pat;
@@ -356,6 +375,15 @@
         ? 'Heel model: the joint has opened and the flange tips about its edge. Prying forces are not included.'
         : 'Centroid model: valid while the joint stays closed. Negative values mean the bending reduces the clamp load at that bolt.');
     }
+    const PY = r.pry;
+    if (PY) step('Prying', 'Flange prying (Douty & McGuire)', [
+      ['a<sub>eff</sub> = min(a, 1.25·b)', 'min(' + N(PY.a, 1) + ', 1.25·' + N(PY.b, 1) + ')', N(PY.aEff, 1) + ' mm'],
+      ['X = w·t⁴ / (a·b²·A<sub>b</sub>)', N(PY.w, 1) + '·' + N(PY.t, 1) + '⁴ / (' + N(PY.aEff, 1) + '·' + N(PY.b, 1) + '²·' + N(PY.Ab, 1) + ')', N(PY.X, 3)],
+      ['Q/T = (1/2 − X/30) / ((a/b)·(a/(3b) + 1) + X/6)', '', N(PY.ratio, 3) + (PY.raw < 0 ? ' (negative → 0)' : '')],
+      ['Q = (Q/T)·T; F<sub>A</sub> → T + Q', N(PY.ratio, 3) + '·' + kN(PY.T), kN(PY.Q) + ' → ' + kN(PY.T + PY.Q)],
+      ['σ<sub>web</sub> = 6·|T·b − Q·a| / (w·t²)', '6·' + N(PY.Mweb / 1000, 1) + ' N·m / (' + N(PY.w, 1) + '·' + N(PY.t, 1) + '²)', N(PY.sigWeb, 0) + ' MPa'],
+      ['σ<sub>bolt</sub> = 6·Q·a / ((w − d<sub>h</sub>)·t²)', '6·' + N(PY.Mbolt / 1000, 1) + ' N·m / (' + N(PY.wNet, 1) + '·' + N(PY.t, 1) + '²)', N(PY.sigBolt, 0) + ' MPa'],
+    ], 'Flange checked against ' + (PY.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + N(PY.fAllow, 0) + ' MPa of ' + PY.mat.label + '. A<sub>b</sub> is the stress area.');
     step('R0', 'Thread geometry and stress area', [
       ['d<sub>2</sub> = d − 0.6495·P', N(g.d) + ' − 0.6495·' + N(g.P), N(g.d2, 3) + ' mm'],
       ['d<sub>3</sub> = d − 1.2269·P', N(g.d) + ' − 1.2269·' + N(g.P), N(g.d3, 3) + ' mm'],
@@ -549,14 +577,14 @@
     const tbl = (head, rows) => `<div class="table-wrap lib-scroll"><table class="data"><thead><tr>${head.map((h, i) => `<th${i === 0 ? ' class="left"' : ''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td${i === 0 ? ' class="left"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     const th = D.threadList().map(t => { const g = C.threadGeometry(t.d, t.P); const s = D.SIZES[t.d]; return [t.label, f(g.d2, 3), f(g.d3, 3), f(g.As, 1), f(s.hex.s, 1), f(s.hex.dw, 2), f(s.shcs.dw, 2), s.hole.join(' / ')]; });
     const cls = Object.entries(D.BOLT_CLASSES).map(([k, c]) => [c.label, c.Rm + (c.RmBig ? ' (' + c.RmBig + ')' : ''), c.Rp + (c.RpBig ? ' (' + c.RpBig + ')' : ''), f(c.E / 1000, 0), f(c.alpha * 1e6, 1)]);
-    const mats = Object.values(D.MATERIALS).map(m => [m.label + (m.est ? ' ~' : ''), f(m.E / 1000, 1), f(m.alpha * 1e6, 1), m.Rm, m.pG, f(m.ftau * m.Rm, 0)]);
+    const mats = Object.values(D.MATERIALS).map(m => [m.label + (m.est ? ' ~' : ''), f(m.E / 1000, 1), f(m.alpha * 1e6, 1), m.Rm, m.Rp === null || m.Rp === undefined ? '—' : m.Rp, m.pG, f(m.ftau * m.Rm, 0)]);
     const fr = Object.values(D.FRICTION).filter(x => !x.custom).map(x => [x.label + (x.est ? ' ~' : ''), x.muG.join(' – '), x.muK.join(' – '), x.cls]);
     const tg = Object.values(D.TIGHTENING).map(x => [x.label, x.range, f(x.aA, 2)]);
     const em = Object.values(D.EMBEDDING).map(x => [x.label, x.axial.join(' / '), x.shear.join(' / ')]);
     $('#libs').innerHTML =
       '<h3>Metric threads (ISO 261 / 724), heads and holes</h3>' + tbl(['Thread', 'd₂', 'd₃', 'A<sub>S</sub> mm²', 'Hex s', 'Hex d<sub>W</sub>', 'Socket d<sub>W</sub>', 'Hole f / m / c'], th) +
       '<h3>Property classes (ISO 898-1, ISO 3506-1)</h3>' + tbl(['Class', 'R<sub>m</sub> MPa', 'R<sub>p0.2</sub> MPa', 'E GPa', 'α 10⁻⁶/K'], cls) + '<p class="hint">Values in brackets for 8.8 apply to d &gt; 16 mm.</p>' +
-      '<h3>Materials of clamped and tapped parts</h3>' + tbl(['Material', 'E GPa', 'α 10⁻⁶/K', 'R<sub>m</sub> MPa', 'p<sub>G</sub> MPa', 'τ<sub>B</sub> MPa'], mats) + '<p class="hint">p<sub>G</sub>: limiting surface pressure (VDI 2230 table A9). ~ marks typical estimates; use supplier data where it matters.</p>' +
+      '<h3>Materials of clamped and tapped parts</h3>' + tbl(['Material', 'E GPa', 'α 10⁻⁶/K', 'R<sub>m</sub> MPa', 'R<sub>p</sub> MPa', 'p<sub>G</sub> MPa', 'τ<sub>B</sub> MPa'], mats) + '<p class="hint">p<sub>G</sub>: limiting surface pressure (VDI 2230 table A9). ~ marks typical estimates; use supplier data where it matters.</p>' +
       '<h3>Friction coefficients</h3>' + tbl(['Surface / lubrication', 'μ<sub>G</sub>', 'μ<sub>K</sub>', 'VDI class'], fr) +
       '<h3>Tightening factor α<sub>A</sub> (VDI 2230 table A8)</h3>' + tbl(['Method', 'Range', 'Used'], tg) +
       '<h3>Embedding (VDI 2230 table 5), µm: thread / per bearing / per interface</h3>' + tbl(['Roughness', 'Axial load', 'Transverse load'], em);

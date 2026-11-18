@@ -458,7 +458,44 @@
     return out.join('');
   }
 
+  // ---------------- prying: half T-stub with web, flange, bolt and the forces T, B = T + Q, Q ----------------
+  function pryView(r) {
+    const p = r.pry;
+    if (!p) return '';
+    const id = 'pr' + (++uid);
+    const VW = 460, VH = 276;
+    const webT = Math.max(p.t * 0.8, 4);                       // drawn web thickness (not an input)
+    const span = webT / 2 + p.b + p.a;
+    const sc = Math.min(300 / span, 70 / p.t);
+    const x0 = 70, yTop = 110;                                 // web centre line x, flange top y
+    const X = mm => x0 + mm * sc;
+    const yBot = yTop + p.t * sc;
+    const xWeb = X(webT / 2), xBolt = X(webT / 2 + p.b), xEdge = X(webT / 2 + p.b + p.a);
+    const dh = r.dh * sc, out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Prying of a T-stub flange">${hatchDefs(id)}`];
+    // support below, flange, web
+    out.push(`<rect x="${r1(X(-webT / 2) - 10)}" y="${r1(yBot)}" width="${r1(xEdge - X(-webT / 2) + 30)}" height="26" class="layer m-steel"/><rect x="${r1(X(-webT / 2) - 10)}" y="${r1(yBot)}" width="${r1(xEdge - X(-webT / 2) + 30)}" height="26" fill="url(#${id}-h45)" class="hatch-fill"/>`);
+    out.push(`<path d="M${r1(X(-webT / 2))} ${r1(yTop - 70)} V${r1(yTop)} H${r1(xBolt - dh / 2)} V${r1(yBot)} H${r1(X(-webT / 2))} Z" class="layer m-aluminium"/>`);
+    out.push(`<path d="M${r1(xBolt + dh / 2)} ${r1(yTop)} H${r1(xEdge)} V${r1(yBot)} H${r1(xBolt + dh / 2)} Z" class="layer m-aluminium"/>`);
+    out.push(`<rect x="${r1(X(-webT / 2))}" y="${r1(yTop - 70)}" width="${r1(webT * sc)}" height="70" class="layer m-aluminium"/>`);
+    // bolt
+    const bw = r.g.d * sc, hk = Math.max(6, r.g.d * 0.7 * sc);
+    out.push(`<rect x="${r1(xBolt - bw / 2)}" y="${r1(yTop - hk)}" width="${r1(bw)}" height="${r1(yBot - yTop + hk + 22)}" class="bolt"/>`);
+    out.push(`<rect x="${r1(xBolt - bw * 0.85)}" y="${r1(yTop - hk)}" width="${r1(bw * 1.7)}" height="${r1(hk)}" class="bolt"/>`);
+    // forces
+    const arr = (x, y1, y2, cls, label, anchor) => `<line x1="${r1(x)}" y1="${r1(y1)}" x2="${r1(x)}" y2="${r1(y2)}" class="force${cls}" marker-end="url(#${id}-arrF)"/><text x="${r1(x + (anchor === 'end' ? -6 : 6))}" y="${r1((y1 + y2) / 2)}" text-anchor="${anchor || 'start'}" class="force-text">${label}</text>`;
+    out.push(arr(x0, yTop - 72, yTop - 106, '', 'T = ' + f(p.T / 1000, 2) + ' kN'));
+    out.push(arr(xBolt, yTop - hk - 4, yTop - hk - 44, '', 'B = T + Q = ' + f((p.T + p.Q) / 1000, 2) + ' kN'));
+    if (p.Q > 0) out.push(arr(xEdge - 3, yBot + 44, yBot + 4, '', 'Q = ' + f(p.Q / 1000, 2) + ' kN', 'end'));
+    // dimensions
+    out.push(dimH(yBot + 62, xWeb, xBolt, 'b = ' + f(p.b, 1), id, false));
+    out.push(dimH(yBot + 62, xBolt, xEdge, 'a = ' + f(p.aEff, 1) + (p.a > p.aEff ? ' (limited)' : ''), id, false));
+    out.push(dimV(xEdge + 22, yTop, yBot, 't = ' + f(p.t, 1), id, 'right'));
+    out.push(`<text x="${VW - 6}" y="18" text-anchor="end" class="lbl">per bolt, flange width w = ${f(p.w, 1)} mm</text>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView };
+  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView };
 })(window);
