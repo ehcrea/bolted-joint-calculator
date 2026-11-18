@@ -154,6 +154,8 @@
       helicoil: state.joint === 'helicoil', insert: state.joint === 'insert',
       'mode-nu': state.mode !== 'torque', 'mode-torque': state.mode === 'torque',
       nasa: !!state.nasa,
+      pat: !!state.patOn, 'no-pat': !state.patOn,
+      'pat-circle': state.patType !== 'rect', 'pat-rect': state.patType === 'rect',
     };
     $$('[data-show]').forEach(el => { el.hidden = !el.dataset.show.split(' ').some(t => show[t]); });
     $('#engage-title').textContent = { tapped: 'Tapped part', helicoil: 'Heli-Coil (wire thread insert)', insert: 'Solid threaded insert' }[state.joint] || '';
@@ -213,6 +215,7 @@
       renderIssues(r.issues);
       ['#section', '#diagram', '#thread-detail', '#friction-chart', '#torque-bar', '#steps', '#checks', '#strip', '#diag-metrics', '#thread-metrics'].forEach(s => { $(s).innerHTML = ''; });
       $('#nasa-card').hidden = true;
+      $('#pat-card').hidden = true;
       return;
     }
     hero.classList.remove('invalid');
@@ -251,6 +254,7 @@
     $('#friction-chart').innerHTML = DR.frictionChart(r);
     $('#torque-bar').innerHTML = DR.torqueBar(r);
     renderChecks(r);
+    renderPattern(r);
     renderNasa(r);
     renderStrip(r);
     $('#steps').innerHTML = steps(r);
@@ -282,6 +286,17 @@
     const head = '<thead><tr><th class="left">Step</th><th class="left">Check</th><th>Value</th><th>Limit</th><th>Safety</th><th>Status</th></tr></thead>';
     const rows = r.checks.map(c => `<tr><td class="left">${c.id}</td><td class="left">${c.label}</td><td class="strong">${fmtVal(c.value, c.unit)}</td><td>${c.limit}</td><td>${c.safety !== undefined ? f(c.safety, 2) : ''}</td><td><span class="status ${c.status}">${{ ok: '✓ OK', warn: '! Check', error: '✕ Fail' }[c.status]}</span></td></tr>`).join('');
     $('#checks').innerHTML = head + '<tbody>' + rows + '</tbody>';
+  }
+  function renderPattern(r) {
+    const card = $('#pat-card'), P = r.pat;
+    card.hidden = !P;
+    if (!P) return;
+    $('#pat-view').innerHTML = DR.patternView(r, state);
+    $('#pat-badge').textContent = P.n + ' bolts · ' + (P.method === 'heel' ? 'heel model' : 'centroid model');
+    const head = '<thead><tr><th class="left">Bolt</th><th>x (mm)</th><th>y (mm)</th><th>Tension F<sub>A</sub> (kN)</th><th>Shear F<sub>Q</sub> (kN)</th></tr></thead>';
+    const rows = P.bolts.map(b => `<tr class="${b === P.critA && P.FAmax > 0 ? 'hl' : ''}"><td class="left">${b.i}${b === P.critA && P.FAmax > 0 ? ' <span class="badge">max tension</span>' : ''}${b === P.critQ && P.FQmax > 0 ? ' <span class="badge">max shear</span>' : ''}</td>` +
+      `<td>${f(b.x, 1)}</td><td>${f(b.y, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td><td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
+    $('#pat-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
   }
   function renderNasa(r) {
     const card = $('#nasa-card'), N = r.nasa;
@@ -325,6 +340,22 @@
     const g = r.g, kN = x => f(x / 1000, 2) + ' kN', N = (x, d) => f(x, d);
     const S = [];
     const step = (id, title, rows, note) => S.push(`<section class="calc-step"><h3><span class="sid">${id}</span>${title}</h3><table class="ftable">${rows.map(([a, b, c]) => `<tr><td class="fl">${a}</td><td class="fs">${b || ''}</td><td class="fr">${c || ''}</td></tr>`).join('')}</table>${note ? `<p class="hint">${note}</p>` : ''}</section>`);
+
+    const PT = r.pat;
+    if (PT) {
+      const cb = PT.critA, mm = x => N(x / 1000, 0);
+      const rows = [
+        ['Σx² , Σy² , Σr² = Σ(x² + y²)', PT.n + ' bolts', N(PT.Sx2, 0) + ', ' + N(PT.Sy2, 0) + ', ' + N(PT.Sr2, 0) + ' mm²'],
+        PT.method === 'heel'
+          ? ['F<sub>A,i</sub> = F<sub>z</sub>/n + M·h<sub>i</sub>/Σh² (heel at ' + N(PT.c, 1) + ' mm from the centre)', 'bolt ' + cb.i + ': ' + kN(PT.Fz) + '/' + PT.n + ' + ' + mm(PT.Mb) + ' N·m·' + N(cb.h, 1) + '/' + N(PT.Sh2, 0), kN(cb.FA)]
+          : ['F<sub>A,i</sub> = F<sub>z</sub>/n + M<sub>x</sub>·y<sub>i</sub>/Σy² − M<sub>y</sub>·x<sub>i</sub>/Σx²', 'bolt ' + cb.i + ': ' + kN(PT.Fz) + '/' + PT.n + ' + ' + mm(PT.Mx) + '·' + N(cb.y, 1) + '/' + N(PT.Sy2, 0) + ' − ' + mm(PT.My) + '·' + N(cb.x, 1) + '/' + N(PT.Sx2, 0) + ' (N·m, mm)', kN(cb.FA)],
+        ['F<sub>Q,i</sub> = |(F<sub>x</sub>/n − M<sub>z</sub>·y<sub>i</sub>/Σr², F<sub>y</sub>/n + M<sub>z</sub>·x<sub>i</sub>/Σr²)|', 'bolt ' + PT.critQ.i, kN(PT.FQmax)],
+        ['F<sub>A,max</sub>, F<sub>A,min</sub> = R·F<sub>A,max</sub>, F<sub>Q</sub> → single-bolt check', 'R = ' + N(PT.ratio, 2), kN(PT.FAmax) + ', ' + kN(PT.ratio * PT.FAmax) + ', ' + kN(PT.FQmax)],
+      ];
+      step('Pattern', 'Bolt pattern load distribution (rigid flange)', rows, PT.method === 'heel'
+        ? 'Heel model: the joint has opened and the flange tips about its edge. Prying forces are not included.'
+        : 'Centroid model: valid while the joint stays closed. Negative values mean the bending reduces the clamp load at that bolt.');
+    }
     step('R0', 'Thread geometry and stress area', [
       ['d<sub>2</sub> = d − 0.6495·P', N(g.d) + ' − 0.6495·' + N(g.P), N(g.d2, 3) + ' mm'],
       ['d<sub>3</sub> = d − 1.2269·P', N(g.d) + ' − 1.2269·' + N(g.P), N(g.d3, 3) + ' mm'],

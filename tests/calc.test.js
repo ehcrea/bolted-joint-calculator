@@ -188,6 +188,35 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(neg.status === 'error' && neg.issues.some(i => /negative margin/.test(i.text)), 'negative margin is an error');
 }
 
+// ---- bolt pattern (rigid flange) ----
+{
+  // 6 bolts on Ø100, bolt 1 at 0°: Fz = 6 kN, Mx = 300 N·m → bolts at y = ±43.3 mm; Σy² = 7500 mm²
+  const p = C.boltPattern({ patType: 'circle', patN: 6, patPCD: 100, patAngle: 0, patFz: 6, patMx: 300 });
+  near(p.FAmax, 1000 + 300000 * 43.30127 / 7500, 1e-5, 'centroid model: max tension by hand');
+  near(p.bolts.reduce((s, b) => s + b.FA, 0), 6000, 1e-9, 'tensions sum to Fz');
+  near(p.bolts.reduce((s, b) => s + b.FA * b.y, 0), 300000, 1e-9, 'tension moments sum to Mx');
+  // torsion: Mz = 150 N·m on r = 50 mm, 6 bolts → 150000 / (6·50) = 500 N per bolt, tangential
+  const t = C.boltPattern({ patType: 'circle', patN: 6, patPCD: 100, patMz: 150 });
+  ok(t.bolts.every(b => Math.abs(b.FQ - 500) < 1e-6 && Math.abs(b.qx * b.x + b.qy * b.y) < 1e-6), 'torsion gives equal tangential shear');
+  near(t.bolts.reduce((s, b) => s + (b.x * b.qy - b.y * b.qx), 0), 150000, 1e-9, 'shear moments sum to Mz');
+  // direct shear shared equally
+  const q = C.boltPattern({ patType: 'rect', patNx: 2, patNy: 2, patSx: 60, patSy: 40, patFx: 4 });
+  ok(q.bolts.every(b => Math.abs(b.FQ - 1000) < 1e-9), 'direct shear shared equally');
+  // My: positive My puts the −x side in tension
+  const m = C.boltPattern({ patType: 'rect', patNx: 3, patNy: 3, patSx: 50, patSy: 40, patPerimeter: true, patMy: 200 });
+  ok(m.n === 8 && m.critA.x < 0, 'perimeter grid has 8 bolts; +My loads −x side');
+  // heel model: moment about the flange edge
+  const h = C.boltPattern({ patType: 'circle', patN: 6, patPCD: 100, patAngle: 0, patFz: 6, patMx: 300, patMethod: 'heel', patDf: 130 });
+  near(h.bolts.reduce((s, b) => s + (b.FA - 1000) * b.h, 0), 300000, 1e-9, 'heel model: tension moments about the heel equal M');
+  ok(h.bolts.every(b => b.FA >= 1000 - 1e-9), 'heel model: no bolt relieved below Fz/n');
+  // hand-off to the single-bolt check
+  const r = C.calculate(stateFrom({ patOn: true, patType: 'circle', patN: 6, patPCD: 100, patAngle: 0, patFz: 6, patMx: 300, patFx: 3, patR: 0.5 }));
+  near(r.FAmax, p.FAmax, 1e-9, 'worst bolt tension used as FA,max');
+  near(r.FAmin, 0.5 * p.FAmax, 1e-9, 'load ratio gives FA,min');
+  near(r.FQ, 500, 1e-9, 'pattern shear used as FQ');
+  ok(r.pat && r.pat.n === 6, 'pattern returned with the result');
+}
+
 // ---- every example computes, has no NaN and is not failing ----
 for (const p of P.PRESETS) {
   const r = C.calculate(stateFrom(p.s));

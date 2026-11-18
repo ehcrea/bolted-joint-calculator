@@ -404,7 +404,61 @@
       <div class="tlegend">${parts.map(p => `<span><i class="${p[2]}"></i>${p[0]}</span>`).join('')}</div>`;
   }
 
+  // ---------------- bolt pattern: plan view with the load on each bolt ----------------
+  function patternView(r, inp) {
+    const P = r.pat;
+    if (!P) return '';
+    const id = 'pv' + (++uid);
+    const VW = 460, VH = 380, cx = 200, cy = 190, half = 150;
+    const rect = inp.patType === 'rect';
+    const fl = rect ? { w: +inp.patLx || 0, h: +inp.patLy || 0 } : { d: +inp.patDf || 0 };
+    const ext = Math.max(rect ? Math.max(fl.w, fl.h) / 2 : fl.d / 2, ...P.bolts.map(b => Math.hypot(b.x, b.y) + r.dW / 2), 1);
+    const sc = half / ext;
+    const X = x => cx + x * sc, Y = y => cy - y * sc;
+    const out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Bolt pattern with the load on each bolt">${hatchDefs(id)}
+      <defs><marker id="${id}-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 1L10 5L0 9z" class="pat-shear-head"/></marker></defs>`];
+    // flange outline
+    if (rect && fl.w > 0 && fl.h > 0) out.push(`<rect x="${r1(X(-fl.w / 2))}" y="${r1(Y(fl.h / 2))}" width="${r1(fl.w * sc)}" height="${r1(fl.h * sc)}" rx="4" class="pat-flange"/>`);
+    else if (!rect && fl.d > 0) out.push(`<circle cx="${cx}" cy="${cy}" r="${r1(fl.d / 2 * sc)}" class="pat-flange"/>`);
+    if (!rect) out.push(`<circle cx="${cx}" cy="${cy}" r="${r1((+inp.patPCD || 0) / 2 * sc)}" class="guide" fill="none"/>`);
+    // bending axis: neutral axis through the centroid, or the heel line at the flange edge
+    if (P.Mb > 0) {
+      let v = { x: -P.u.y, y: P.u.x };
+      if (v.x < 0 || (v.x === 0 && v.y < 0)) v = { x: -v.x, y: -v.y };   // label at the right-hand end
+      const L = ext * 1.05;
+      const o = P.method === 'heel' ? { x: -P.c * P.u.x, y: -P.c * P.u.y } : { x: 0, y: 0 };
+      out.push(`<line x1="${r1(X(o.x - L * v.x))}" y1="${r1(Y(o.y - L * v.y))}" x2="${r1(X(o.x + L * v.x))}" y2="${r1(Y(o.y + L * v.y))}" class="pat-axis"/>`);
+      const lx = X(o.x + L * v.x), ly = Y(o.y + L * v.y);
+      out.push(`<text x="${r1(lx + 4)}" y="${r1(ly - 4)}" class="pat-axis-text">${P.method === 'heel' ? 'heel line' : 'neutral axis'}</text>`);
+    }
+    // bolts
+    const maxQ = Math.max(...P.bolts.map(b => b.FQ), 1e-9);
+    const rb = Math.max(7, r.dW / 2 * sc);
+    P.bolts.forEach(b => {
+      const t = P.FAmax > 0 ? b.FAt / P.FAmax : 0;
+      const crit = b === P.critA && P.FAmax > 0;
+      out.push(`<circle cx="${r1(X(b.x))}" cy="${r1(Y(b.y))}" r="${r1(rb)}" class="pat-bolt${crit ? ' crit' : ''}" style="fill-opacity:${(0.08 + 0.8 * t).toFixed(2)}"/>`);
+      out.push(`<text x="${r1(X(b.x))}" y="${r1(Y(b.y) + 4)}" class="pat-num">${b.i}</text>`);
+      if (b.FQ > 0) {
+        const len = 18 + 40 * b.FQ / maxQ, ux = b.qx / b.FQ, uy = b.qy / b.FQ;
+        const x0 = X(b.x) + ux * rb, y0 = Y(b.y) - uy * rb;
+        out.push(`<line x1="${r1(x0)}" y1="${r1(y0)}" x2="${r1(x0 + ux * len)}" y2="${r1(y0 - uy * len)}" class="pat-shear" marker-end="url(#${id}-q)"/>`);
+      }
+      const ang = Math.atan2(b.y, b.x), lr = rb + 13;
+      const tx = X(b.x) + (Math.hypot(b.x, b.y) > 0 ? Math.cos(ang) : 1) * lr, ty = Y(b.y) - (Math.hypot(b.x, b.y) > 0 ? Math.sin(ang) : 0) * lr;
+      const anchor = Math.cos(ang) > 0.3 ? 'start' : Math.cos(ang) < -0.3 ? 'end' : 'middle';
+      out.push(`<text x="${r1(tx)}" y="${r1(ty + 4)}" text-anchor="${anchor}" class="pat-val${crit ? ' crit' : ''}">${f(b.FA / 1000, 2)}</text>`);
+    });
+    // axes and legend
+    out.push(`<line x1="24" y1="${VH - 24}" x2="58" y2="${VH - 24}" class="dim" marker-end="url(#${id}-arr)"/><text x="62" y="${VH - 20}" class="lbl">x</text>`);
+    out.push(`<line x1="24" y1="${VH - 24}" x2="24" y2="${VH - 58}" class="dim" marker-end="url(#${id}-arr)"/><text x="20" y="${VH - 62}" class="lbl">y</text>`);
+    out.push(`<text x="${VW - 6}" y="20" text-anchor="end" class="lbl">numbers: bolt tension F<tspan baseline-shift="sub" font-size="9">A</tspan> (kN)</text>`);
+    out.push(`<text x="${VW - 6}" y="36" text-anchor="end" class="pat-axis-text">arrows: shear on each bolt</text>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar };
+  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView };
 })(window);

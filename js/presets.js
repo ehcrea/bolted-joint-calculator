@@ -12,6 +12,9 @@
     FAmax: 8, FAmin: 0, FQ: 1.5, muT: 0.15, qF: 1, SGreq: 1.2, FKmin: 0, dT: 0, n: 0.5,
     nasa: false, nGamma: '', nTtol: 10, nRelax: 5, nTpvMin: 0, nTpvMax: 0, nTpvAdded: false,
     nFSy: 1.25, nFSu: 1.4, nFSsep: 1.2, nFSslip: 1.2, nFF: 1.15,
+    patOn: false, patType: 'circle', patMethod: 'centroid', patN: 6, patPCD: 100, patAngle: 90, patDf: 130,
+    patNx: 2, patNy: 2, patSx: 80, patSy: 60, patPerimeter: true, patLx: 110, patLy: 90,
+    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0,
   };
 
   const PRESETS = [
@@ -79,6 +82,18 @@
       joint: 'helicoil', thread: 'M4', cls: 'A2-70', head: 'shcs', washer: '7089', washerGrade: 'A2',
       plates: [{ mat: '6061T6', t: 3 }, { mat: '1.4301', t: 10 }], tapMat: '6061T6', hcLen: 2, DA: 10, rough: 'fine', friction: 'ss-paste',
       method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.1, FAmin: 0, FQ: 0.05, muT: 0.15, dT: -55 } },
+    // Bolt patterns: loads on the whole flange, distributed with the rigid-flange model.
+    { id: 'pat-flange', label: 'M8 10.9, 6-bolt circular flange (Ø80 PCD), bending + torsion', s: {
+      joint: 'tapped', thread: 'M8', cls: '10.9', head: 'shcs', washer: 'none', plates: [{ mat: '42CrMo4', t: 12 }],
+      tapMat: 'C45', engage: 12, rough: 'medium', friction: 'oxide-oil', method: 'tw-test', nu: 0.9, muT: 0.15, n: 0.5,
+      patOn: true, patType: 'circle', patN: 6, patPCD: 80, patAngle: 90, patDf: 104,
+      patFz: 4, patMx: 250, patMz: 150, patFx: 2, patR: 0 } },
+    { id: 'pat-bracket', label: 'M6 8.8, 4-bolt bracket into aluminium (Heli-Coil), overhanging load', s: {
+      joint: 'helicoil', thread: 'M6', cls: '8.8', head: 'shcs', washer: '7089', washerGrade: '300HV',
+      plates: [{ mat: 'S235', t: 8 }], tapMat: '6061T6', hcLen: 1.5, rough: 'fine', friction: 'oxide-oil', method: 'tw-test',
+      nu: 0.9, muT: 0.15, n: 0.5,
+      patOn: true, patType: 'rect', patNx: 2, patNy: 2, patSx: 60, patSy: 40, patLx: 80, patLy: 60,
+      patFy: -1.2, patMx: -100, patR: 0 } },
   ];
   // List from the smallest bolt to the largest (stable sort: same size keeps the order above).
   const size = p => parseFloat(String(p.s.thread || DEFAULT.thread).replace(/^M/, ''));

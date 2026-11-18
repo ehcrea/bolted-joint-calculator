@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=17">
+  <link rel="stylesheet" href="css/style.css?v=20">
   <script>
     try { const t = localStorage.getItem('bolt.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -180,10 +180,11 @@
 
       <fieldset>
         <legend><span class="step">5</span>Loads per bolt</legend>
+        <p class="hint" data-show="pat">Axial and transverse loads come from the bolt pattern (section 6): the most loaded bolt is checked.</p>
         <div class="grid2">
-          <label><span class="lt">Axial load F<sub>A,max</sub> <span class="tip" tabindex="0" title="Maximum working load along the bolt axis, per bolt, pulling the joint apart.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FAmax"></label>
-          <label><span class="lt">F<sub>A,min</sub> <span class="tip" tabindex="0" title="Minimum axial load of a cycle. Equal to FA,max for a static load; 0 for a pulsating load.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FAmin"></label>
-          <label><span class="lt">Transverse load F<sub>Q</sub> <span class="tip" tabindex="0" title="Shear load across the joint per bolt, carried by friction between the clamped parts.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FQ"></label>
+          <label data-show="no-pat"><span class="lt">Axial load F<sub>A,max</sub> <span class="tip" tabindex="0" title="Maximum working load along the bolt axis, per bolt, pulling the joint apart.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FAmax"></label>
+          <label data-show="no-pat"><span class="lt">F<sub>A,min</sub> <span class="tip" tabindex="0" title="Minimum axial load of a cycle. Equal to FA,max for a static load; 0 for a pulsating load.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FAmin"></label>
+          <label data-show="no-pat"><span class="lt">Transverse load F<sub>Q</sub> <span class="tip" tabindex="0" title="Shear load across the joint per bolt, carried by friction between the clamped parts.">ⓘ</span></span> <span class="u">(kN)</span><input type="number" step="any" min="0" data-key="FQ"></label>
           <label><span class="lt">Interface friction μ<sub>T</sub> <span class="tip" tabindex="0" title="Static friction between the clamped parts (VDI 2230 table A6). Use the lower value of the range.">ⓘ</span></span><input type="number" step="0.01" min="0" data-key="muT" list="muT-list"></label>
           <label><span class="lt">Friction interfaces q<sub>F</sub> <span class="tip" tabindex="0" title="Number of interfaces that transmit the transverse load (1 for two plates, 2 for a double-shear splice).">ⓘ</span></span><input type="number" step="1" min="1" data-key="qF"></label>
           <label><span class="lt">Slip safety S<sub>G</sub> req. <span class="tip" tabindex="0" title="VDI 2230: 1.2 for static, 1.8 for alternating transverse loads.">ⓘ</span></span><input type="number" step="0.1" min="1" data-key="SGreq"></label>
@@ -195,7 +196,43 @@
       </fieldset>
 
       <fieldset>
-        <legend><span class="step">6</span>Aerospace check</legend>
+        <legend><span class="step">6</span>Bolt pattern</legend>
+        <label class="check"><input type="checkbox" data-key="patOn"> Loads act on a bolt pattern <span class="tip" tabindex="0" title="Enter the forces and moments on the whole flange. A rigid-flange (bolt group) model gives the tension and shear on each bolt; the most loaded bolt is then checked with VDI 2230 (and NASA-STD-5020 if ticked).">ⓘ</span></label>
+        <div data-show="pat">
+          <div class="grid2">
+            <label>Pattern
+              <select data-key="patType"><option value="circle">Circular (bolt circle)</option><option value="rect">Rectangular grid</option></select>
+            </label>
+            <label><span class="lt">Bending model <span class="tip" tabindex="0" title="Centroid: the joint stays closed and the flange rotates about the bolt-group centroid (preloaded joints, VDI 2230 Part 2 approach while there is no opening). Heel: the flange has opened and tips about its edge; use it for ultimate loads or joints that may separate. Prying forces are not included.">ⓘ</span></span>
+              <select data-key="patMethod"><option value="centroid">Centroid (joint closed)</option><option value="heel">Heel at flange edge (opened)</option></select>
+            </label>
+            <label data-show="pat-circle"><span class="lt">Number of bolts</span><input type="number" step="1" min="2" data-key="patN"></label>
+            <label data-show="pat-circle"><span class="lt">Pitch circle Ø</span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patPCD"></label>
+            <label data-show="pat-circle"><span class="lt">First bolt angle <span class="tip" tabindex="0" title="Angle of bolt 1 from the x axis, counter-clockwise.">ⓘ</span></span> <span class="u">(°)</span><input type="number" step="any" data-key="patAngle"></label>
+            <label data-show="pat-circle"><span class="lt">Flange outer Ø <span class="tip" tabindex="0" title="Used for the heel line (bending model Heel) and the drawing.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patDf"></label>
+            <label data-show="pat-rect"><span class="lt">Bolts along x</span><input type="number" step="1" min="1" data-key="patNx"></label>
+            <label data-show="pat-rect"><span class="lt">Bolts along y</span><input type="number" step="1" min="1" data-key="patNy"></label>
+            <label data-show="pat-rect"><span class="lt">Spacing s<sub>x</sub></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patSx"></label>
+            <label data-show="pat-rect"><span class="lt">Spacing s<sub>y</sub></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patSy"></label>
+            <label data-show="pat-rect"><span class="lt">Flange size L<sub>x</sub></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patLx"></label>
+            <label data-show="pat-rect"><span class="lt">Flange size L<sub>y</sub></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="patLy"></label>
+          </div>
+          <label class="check" data-show="pat-rect"><input type="checkbox" data-key="patPerimeter"> Bolts on the perimeter only</label>
+          <p class="hint">Loads on the whole flange, at the pattern centre. z is the bolt axis (pulling the joint apart is +); moments follow the right-hand rule.</p>
+          <div class="grid2">
+            <label><span class="lt">F<sub>x</sub></span> <span class="u">(kN)</span><input type="number" step="any" data-key="patFx"></label>
+            <label><span class="lt">M<sub>x</sub> <span class="tip" tabindex="0" title="Bending about x: a positive Mx loads the bolts on the +y side in tension.">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMx"></label>
+            <label><span class="lt">F<sub>y</sub></span> <span class="u">(kN)</span><input type="number" step="any" data-key="patFy"></label>
+            <label><span class="lt">M<sub>y</sub> <span class="tip" tabindex="0" title="Bending about y: a positive My loads the bolts on the −x side in tension.">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMy"></label>
+            <label><span class="lt">F<sub>z</sub> (axial)</span> <span class="u">(kN)</span><input type="number" step="any" data-key="patFz"></label>
+            <label><span class="lt">M<sub>z</sub> (torsion)</span> <span class="u">(N·m)</span><input type="number" step="any" data-key="patMz"></label>
+            <label><span class="lt">Load ratio min/max <span class="tip" tabindex="0" title="For fatigue: the minimum of the load cycle as a share of the maximum (0 = pulsating, 1 = static).">ⓘ</span></span><input type="number" step="0.1" min="0" max="1" data-key="patR"></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">7</span>Aerospace check</legend>
         <label class="check"><input type="checkbox" data-key="nasa"> Also check to NASA-STD-5020 <span class="tip" tabindex="0" title="Spaceflight method for threaded fasteners: preload range from the torque range and a preload uncertainty Γ, factors of safety on the limit loads, and margins of safety MS = allowable / (factored load) − 1 ≥ 0. Uses the same joint stiffness, load factor and temperature change as the VDI 2230 calculation.">ⓘ</span></label>
         <div class="grid2" data-show="nasa">
           <label><span class="lt">Preload uncertainty Γ <span class="tip" tabindex="0" title="Scatter of the preload for torque-controlled tightening. Leave blank for the usual default: ±25 % lubricated, ±35 % dry (also used for thread-lockers and custom friction). Use a smaller value from torque–tension tests or when the preload is measured.">ⓘ</span></span> <span class="u">(blank = auto)</span><input type="number" step="0.01" min="0" max="0.9" data-key="nGamma" placeholder="auto"></label>
@@ -240,6 +277,13 @@
           <div class="drawing" id="diagram"></div>
           <div class="metrics" id="diag-metrics"></div>
         </div>
+      </div>
+
+      <div class="card" id="pat-card" hidden>
+        <div class="card-head"><h2>Bolt pattern</h2><span class="badge" id="pat-badge"></span></div>
+        <p class="card-note">Rigid-flange (bolt group) model: tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.</p>
+        <div class="drawing" id="pat-view"></div>
+        <div class="table-wrap"><table class="data" id="pat-table"></table></div>
       </div>
 
       <div class="card">
@@ -346,6 +390,15 @@
       <dt>Thread stripping</dt><dd>The thread flanks shear off. Good design makes the bolt break first: a longer engagement or an insert in soft materials.</dd>
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
+    <h3 id="help-pattern">Bolt patterns</h3>
+    <p>Tick <b>Loads act on a bolt pattern</b> in section 6 and enter the forces and moments on the whole flange. The tool treats the flange as rigid (the classical bolt-group model):</p>
+    <ul>
+      <li><b>Shear</b> F<sub>x</sub>, F<sub>y</sub> is shared equally; torsion M<sub>z</sub> adds a shear M<sub>z</sub>·r<sub>i</sub>/Σr² at right angles to each bolt radius.</li>
+      <li><b>Tension</b> F<sub>z</sub> is shared equally; bending adds M·y<sub>i</sub>/Σy² about the bolt-group centroid (<b>centroid model</b>, valid while the preloaded joint stays closed) or M·h<sub>i</sub>/Σh² about the flange edge (<b>heel model</b>, for a joint that has opened or for ultimate loads).</li>
+      <li>The bolt with the highest tension and the highest shear are combined into one design bolt (conservative if they are different bolts), which runs through all the checks.</li>
+    </ul>
+    <p class="about-meta">Not included: flange bending and prying forces, unequal bolt stiffness, and the eccentric loading and clamping inside one bolt (VDI 2230 Part 1 eccentric case). For flexible flanges these can raise the bolt load considerably.</p>
+
     <h3 id="help-nasa">Aerospace check (NASA-STD-5020)</h3>
     <p>Spaceflight hardware for NASA follows NASA-STD-5020 (threaded fastening systems); ESA uses ECSS-E-HB-32-23A. Tick <b>Also check to NASA-STD-5020</b> in section 6 to run it next to VDI 2230 on the same joint. The main differences:</p>
     <ul>
@@ -393,10 +446,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=17"></script>
-  <script src="js/calc.js?v=17"></script>
-  <script src="js/presets.js?v=17"></script>
-  <script src="js/drawing.js?v=17"></script>
-  <script src="js/app.js?v=17"></script>
+  <script src="js/data.js?v=20"></script>
+  <script src="js/calc.js?v=20"></script>
+  <script src="js/presets.js?v=20"></script>
+  <script src="js/drawing.js?v=20"></script>
+  <script src="js/app.js?v=20"></script>
 </body>
 </html>

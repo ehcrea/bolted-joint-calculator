@@ -85,10 +85,72 @@
   function stdLengthAtLeast(l) { return STD_LENGTHS.find(x => x >= l - 1e-9) || Math.ceil(l / 10) * 10; }
   function stdLengthAtMost(l) { let r = null; for (const x of STD_LENGTHS) if (x <= l + 1e-9) r = x; return r; }
 
+  // ---------------- bolt pattern: load distribution over a rigid flange ----------------
+  // Bolt positions for a circular or rectangular pattern, centred on the pattern centroid (mm).
+  function patternBolts(inp) {
+    const pts = [];
+    if (inp.patType === 'rect') {
+      const nx = Math.max(1, Math.round(+inp.patNx || 2)), ny = Math.max(1, Math.round(+inp.patNy || 2));
+      const sx = Math.max(0, +inp.patSx || 0), sy = Math.max(0, +inp.patSy || 0);
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        if (inp.patPerimeter && nx > 2 && ny > 2 && i > 0 && i < nx - 1 && j > 0 && j < ny - 1) continue;
+        pts.push({ x: (i - (nx - 1) / 2) * sx, y: ((ny - 1) / 2 - j) * sy });
+      }
+    } else {
+      const n = Math.max(2, Math.round(+inp.patN || 4)), R = Math.max(0, +inp.patPCD || 0) / 2, a0 = (+inp.patAngle || 0) * PI / 180;
+      for (let i = 0; i < n; i++) { const a = a0 + 2 * PI * i / n; pts.push({ x: R * Math.cos(a), y: R * Math.sin(a) }); }
+    }
+    return pts;
+  }
+  // Rigid-flange (bolt group) model. In-plane: direct shear F/n plus torsion Mz·r/Σr². Out of plane:
+  //  - 'centroid': joint stays closed, bending about the bolt-group centroid: Fz/n + (Mx·y/Σy² − My·x/Σx²)
+  //  - 'heel': flange tips about its edge after opening (prying not included): Fz/n + M·h/Σh², h = distance to the heel line
+  // Loads: forces in kN, moments in N·m (converted to N and N·mm).
+  function boltPattern(inp) {
+    const pts = patternBolts(inp), n = pts.length;
+    const Fx = (+inp.patFx || 0) * 1000, Fy = (+inp.patFy || 0) * 1000, Fz = (+inp.patFz || 0) * 1000;
+    const Mx = (+inp.patMx || 0) * 1000, My = (+inp.patMy || 0) * 1000, Mz = (+inp.patMz || 0) * 1000;
+    const Sx2 = pts.reduce((s, p) => s + p.x * p.x, 0), Sy2 = pts.reduce((s, p) => s + p.y * p.y, 0), Sr2 = Sx2 + Sy2;
+    const method = inp.patMethod === 'heel' ? 'heel' : 'centroid';
+    const Mb = Math.hypot(Mx, My);
+    const u = Mb > 0 ? { x: -My / Mb, y: Mx / Mb } : { x: 0, y: 1 };      // direction towards the tension side
+    let c = 0, Sh2 = 0;
+    if (method === 'heel') {
+      if (inp.patType === 'rect') c = Math.abs(u.x) * (+inp.patLx || 0) / 2 + Math.abs(u.y) * (+inp.patLy || 0) / 2;
+      else c = (+inp.patDf || 0) / 2;
+      const maxProj = Math.max(...pts.map(p => -(p.x * u.x + p.y * u.y)));
+      c = Math.max(c, maxProj);                                              // heel at least at the outermost bolt
+      Sh2 = pts.reduce((s, p) => s + Math.pow(p.x * u.x + p.y * u.y + c, 2), 0);
+    }
+    const bolts = pts.map((p, i) => {
+      let FA;
+      if (method === 'heel') { const h = p.x * u.x + p.y * u.y + c; FA = Fz / n + (Sh2 > 0 ? Mb * h / Sh2 : 0); p.h = h; }
+      else FA = Fz / n + (Sy2 > 0 ? Mx * p.y / Sy2 : 0) - (Sx2 > 0 ? My * p.x / Sx2 : 0);
+      const qx = Fx / n - (Sr2 > 0 ? Mz * p.y / Sr2 : 0), qy = Fy / n + (Sr2 > 0 ? Mz * p.x / Sr2 : 0);
+      return { i: i + 1, x: p.x, y: p.y, h: p.h, FA, FAt: Math.max(0, FA), qx, qy, FQ: Math.hypot(qx, qy) };
+    });
+    const critA = bolts.reduce((a, b) => (b.FA > a.FA ? b : a), bolts[0]);
+    let critQ = bolts.reduce((a, b) => (b.FQ > a.FQ ? b : a), bolts[0]);
+    if (critA.FQ >= critQ.FQ * (1 - 1e-9)) critQ = critA;          // ties: report the max-tension bolt
+    const ratio = Math.min(1, Math.max(0, +inp.patR || 0));
+    return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Sx2, Sy2, Sr2, Sh2, c, u, Mb, critA, critQ,
+      FAmax: Math.max(0, critA.FA), FQmax: critQ.FQ, ratio, sameBolt: critA.FQ >= critQ.FQ * (1 - 1e-9),
+      compression: bolts.some(b => b.FA < 0) };
+  }
+
   // ---------------- main ----------------
   function calculate(inp) {
     const issues = [];
     const add = (level, text) => issues.push({ level, text });
+    // Bolt pattern: the most loaded bolt (envelope of max tension and max shear) is checked as the single bolt.
+    let pat = null;
+    if (inp.patOn) {
+      pat = boltPattern(inp);
+      inp = Object.assign({}, inp, { FAmax: pat.FAmax / 1000, FAmin: pat.ratio * pat.FAmax / 1000, FQ: pat.FQmax / 1000 });
+      if (pat.n < 2) add('error', 'The bolt pattern needs at least two bolts.');
+      if (!pat.sameBolt && pat.FQmax > 0 && pat.FAmax > 0) add('info', 'Bolt pattern: the highest tension (bolt ' + pat.critA.i + ') and the highest shear (bolt ' + pat.critQ.i + ') are on different bolts. Both maxima are applied to one bolt, which is conservative.');
+      if (pat.method === 'centroid' && pat.compression && pat.Mb > 0) add('info', 'Bolt pattern: bending is taken about the bolt-group centroid, which assumes the joint stays closed (check that the residual clamp load stays positive). For a joint that may open, or for ultimate loads, use the heel model.');
+    }
     const th = findThread(inp.thread);
     const g = threadGeometry(th.d, th.P);
     const d = g.d;
@@ -502,7 +564,7 @@
       thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
       res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, dC, springAlways, deltaS0, deltaS, deltaP, pr },
-      lock, lockKey, lockerUsed, nasa,
+      lock, lockKey, lockerUsed, nasa, pat,
       n, PhiK, Phi,
       emb: { fZum, nThread, nBear, nInter, nLockExtra, values: ev, shear }, fZ, FZ, FZ0, springStage, dT, dFth, thLoss, thGain,
       FAmax, FAmin, FQ, muT, qF, SGreq, FKQ, FKextra, FKerf, FPA, FSA, FMerf,
@@ -536,7 +598,7 @@
     return dec > 0 ? s.replace(/\.?0+$/, '') || '0' : s;
   }
 
-  const CALC = { calculate, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
+  const CALC = { calculate, boltPattern, patternBolts, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
   if (typeof module !== 'undefined' && module.exports) module.exports = CALC;
   else root.BJ_CALC = CALC;
 })(typeof window !== 'undefined' ? window : globalThis);
