@@ -1,25 +1,25 @@
 /* Bolted Joint Calculator. Base design system shared with the other ehcrea engineering tools. */
 :root {
   color-scheme: light;
-  --bg: #f4f4f2;
-  --surface: #fcfcfb;
-  --surface-2: #f0efec;
-  --border: #e2e1dc;
-  --border-strong: #c9c8c1;
-  --text: #0b0b0b;
-  --text-2: #52514e;
-  --text-3: #7a7973;
-  --accent: #2a78d6;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --border: #dde1e7;
+  --border-strong: #7d8592;
+  --text: #14181f;
+  --text-2: #4a525e;
+  --text-3: #5a626e;
+  --accent: #1f5ea8;
   --accent-ink: #ffffff;
-  --accent-soft: #e6f0fb;
-  --metal: #d9dde3;
-  --metal-edge: #9aa3ad;
-  --rubber: #2b2b2a;
-  --grid: #ebeae6;
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
-  --cold: #2a78d6; --hot: #e34948;
-  --ok: #008300; --warn: #b26b00; --err: #c62828; --info: #2a78d6;
-  --warn-bg: #fff6e5; --err-bg: #fdecec; --info-bg: #eef4fc;
+  --accent-soft: #e6eef8;
+  --metal: #dfe6ef;
+  --metal-edge: #8f9bab;
+  --rubber: #262b33;
+  --grid: #e6e9ee;
+  --s1: #1f5ea8; --s2: #c8501c; --s3: #117a52; --s4: #946200; --s5: #c2457a;
+  --cold: #1f5ea8; --hot: #c8372f;
+  --ok: #1d7a46; --warn: #8a4b00; --err: #b3261e; --info: #1f5ea8;
+  --warn-bg: #fff4e5; --err-bg: #fdecec; --info-bg: #eaf1fa;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -27,27 +27,27 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #111110; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2c; --border-strong: #45453f;
-    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
-    --accent: #3987e5; --accent-soft: #1d2b3d;
-    --metal: #3a3f46; --metal-edge: #6b7480; --rubber: #d7d6d0; --grid: #2a2a28;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
-    --cold: #3987e5; --hot: #e66767;
-    --ok: #3fae3f; --warn: #e0a030; --err: #f07070; --info: #6aa8f0;
-    --warn-bg: #2d2412; --err-bg: #331a1a; --info-bg: #17222f;
+    --bg: #0f1216; --surface: #171b21; --surface-2: #1f252d; --border: #2b323c; --border-strong: #6b7482;
+    --text: #e7eaef; --text-2: #b4bcc7; --text-3: #9aa3af;
+    --accent: #6aa5ec; --accent-ink: #0b1018; --accent-soft: #1b2a3d;
+    --metal: #2a3542; --metal-edge: #6b7a8c; --rubber: #d5dae1; --grid: #262c35;
+    --s1: #6aa5ec; --s2: #f08a4b; --s3: #3fbf8a; --s4: #e0a030; --s5: #e87ba4;
+    --cold: #6aa5ec; --hot: #f07070;
+    --ok: #5cc98c; --warn: #f3c27a; --err: #ff8a80; --info: #6aa5ec;
+    --warn-bg: #2e2312; --err-bg: #331a1a; --info-bg: #17222f;
     --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #111110; --surface: #1a1a19; --surface-2: #232321; --border: #2e2e2c; --border-strong: #45453f;
-  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
-  --accent: #3987e5; --accent-soft: #1d2b3d;
-  --metal: #3a3f46; --metal-edge: #6b7480; --rubber: #d7d6d0; --grid: #2a2a28;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
-  --cold: #3987e5; --hot: #e66767;
-  --ok: #3fae3f; --warn: #e0a030; --err: #f07070; --info: #6aa8f0;
-  --warn-bg: #2d2412; --err-bg: #331a1a; --info-bg: #17222f;
+  --bg: #0f1216; --surface: #171b21; --surface-2: #1f252d; --border: #2b323c; --border-strong: #6b7482;
+  --text: #e7eaef; --text-2: #b4bcc7; --text-3: #9aa3af;
+  --accent: #6aa5ec; --accent-ink: #0b1018; --accent-soft: #1b2a3d;
+  --metal: #2a3542; --metal-edge: #6b7a8c; --rubber: #d5dae1; --grid: #262c35;
+  --s1: #6aa5ec; --s2: #f08a4b; --s3: #3fbf8a; --s4: #e0a030; --s5: #e87ba4;
+  --cold: #6aa5ec; --hot: #f07070;
+  --ok: #5cc98c; --warn: #f3c27a; --err: #ff8a80; --info: #6aa5ec;
+  --warn-bg: #2e2312; --err-bg: #331a1a; --info-bg: #17222f;
   --shadow: none;
 }
 
@@ -253,8 +253,8 @@ table.data td.strong { font-weight: 600; }
 .about a.social-link:hover { border-color: currentColor; text-decoration: underline; }
 .about-support { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--accent-soft); }
 .about-support p { margin: 0 0 10px; }
-.about a.btn-support { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #ff424d; color: #fff; font-weight: 600; font-size: 13px; text-decoration: none; }
-.about a.btn-support:hover { background: #e63a44; }
+.about a.btn-support { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: #d6303a; color: #fff; font-weight: 600; font-size: 13px; text-decoration: none; }
+.about a.btn-support:hover { background: #c42b35; }
 .about .about-meta { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 12px; }
 
 .mini-label { font-size: 12px; color: var(--text-2); font-weight: 500; margin-bottom: 4px; }
@@ -337,18 +337,18 @@ table.data td.wrap { white-space: normal; text-align: left; min-width: 180px; co
 :root {
   --m-steel: #d9dde3; --m-stainless: #cfd9e3; --m-castiron: #b9bdc3; --m-aluminium: #e8ebef; --m-magnesium: #ece8df;
   --m-titanium: #d5d2e0; --m-copper: #ead2b4; --m-polymer: #f2e3c2; --m-pcb: #c5dfc0; --m-washer: #c4ccd6; --m-nut: #c9ced6;
-  --bolt: #8f99a6; --bolt-edge: #4f5865; --cone: rgba(42,120,214,.20); --engaged: rgba(235,104,52,.55); --coil: #eb6834; --insert: #e3b55b;
+  --bolt: #8f99a6; --bolt-edge: #4f5865; --cone: rgba(31,94,168,.20); --engaged: rgba(200,80,28,.55); --coil: #c8501c; --insert: #e3b55b;
 }
 :root[data-theme="dark"] {
   --m-steel: #3a3f46; --m-stainless: #37414c; --m-castiron: #2f3237; --m-aluminium: #464b52; --m-magnesium: #4a463e;
   --m-titanium: #423f4d; --m-copper: #5a4630; --m-polymer: #574b33; --m-pcb: #2e4c34; --m-washer: #5a626d; --m-nut: #505761;
-  --bolt: #77818e; --bolt-edge: #b3bcc8; --cone: rgba(57,135,229,.28); --engaged: rgba(217,89,38,.6); --coil: #d95926; --insert: #b48a3a;
+  --bolt: #77818e; --bolt-edge: #b3bcc8; --cone: rgba(106,165,236,.28); --engaged: rgba(240,138,75,.6); --coil: #f08a4b; --insert: #b48a3a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --m-steel: #3a3f46; --m-stainless: #37414c; --m-castiron: #2f3237; --m-aluminium: #464b52; --m-magnesium: #4a463e;
     --m-titanium: #423f4d; --m-copper: #5a4630; --m-polymer: #574b33; --m-pcb: #2e4c34; --m-washer: #5a626d; --m-nut: #505761;
-    --bolt: #77818e; --bolt-edge: #b3bcc8; --cone: rgba(57,135,229,.28); --engaged: rgba(217,89,38,.6); --coil: #d95926; --insert: #b48a3a;
+    --bolt: #77818e; --bolt-edge: #b3bcc8; --cone: rgba(106,165,236,.28); --engaged: rgba(240,138,75,.6); --coil: #f08a4b; --insert: #b48a3a;
   }
 }
 .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
@@ -443,7 +443,7 @@ svg .c-d3 { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray
 
 /* torque split bar */
 .tbar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 6px 0; }
-.tseg { display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 600; min-width: 34px; }
+.tseg { display: grid; place-items: center; color: var(--accent-ink); font-size: 12px; font-weight: 600; min-width: 34px; }
 .tseg.s2, .tlegend i.s2 { background: var(--s2); } .tseg.s3, .tlegend i.s3 { background: var(--s3); } .tseg.s4, .tlegend i.s4 { background: var(--s4); }
 .tlegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); }
 .tlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
