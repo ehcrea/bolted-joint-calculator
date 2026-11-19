@@ -95,7 +95,7 @@
       const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       const next = cur === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem('bolt.theme', next); } catch (e) { /* ignore */ }
+      try { localStorage.setItem('ehcrea.theme', next); } catch (e) { /* ignore */ }
     });
     $$('[data-load-preset]').forEach(btn => btn.addEventListener('click', () => {
       const sel = $('#preset');
