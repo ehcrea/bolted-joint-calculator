@@ -324,7 +324,7 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   const fail = C.calculate(stateFrom(Object.assign({}, base, { patPts: mixPts, patFz: 40, patMx: 1500 })));
   ok(fail.issues.some(i => i.level === 'error' && /^M6 10\.9 bolts/.test(i.text)), 'a failing other size is reported');
   const none = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0, M8\n100, 0, M8\n50, 60, M12' })));
-  ok(none.issues.some(i => /no bolt in the pattern is the M10 10\.9 from section 1/.test(i.text)), 'section-1 size not used: warned');
+  ok(none.issues.some(i => /no bolt in the pattern is the M10 10\.9 from sections 1–3/.test(i.text)), 'section-1 size not used: warned');
   const si = C.sizeInput({ thread: 'M10', engage: 15, mode: 'torque', MA: 50, holeFit: 'custom', dhCustom: 11 }, 'M6');
   ok(si.thread === 'M6' && Math.abs(si.engage - 9) < 1e-9 && si.mode === 'nu' && Math.abs(si.dhCustom - 6.6) < 1e-9 && !si.patOn, 'size input scales engagement and hole, torque → ν');
 }
@@ -350,9 +350,37 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   const kS = ss.groups.find(g => g.cls === 'A2-70').k, kC = ss.groups.find(g => g.cls === '8.8').k;
   ok(kS < kC, 'stainless bolts (lower E) are a little softer and take a little less');
   const none = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0, 10.9\n100, 0, 10.9\n50, 60, 10.9' })));
-  ok(none.issues.some(i => /no bolt in the pattern is the M10 8\.8 from section 1/.test(i.text)), 'section-1 bolt type not used: warned');
+  ok(none.issues.some(i => /no bolt in the pattern is the M10 8\.8 from sections 1–3/.test(i.text)), 'section-1 bolt type not used: warned');
   const si = C.sizeInput({ thread: 'M10', cls: '8.8' }, 'M10', null, '12.9');
   ok(si.cls === '12.9' && si.thread === 'M10', 'size input sets the class');
+}
+
+// ---- different joint types in one pattern ----
+{
+  ok(C.normJoint('Tapped') === 'tapped' && C.normJoint('hc') === 'helicoil' && C.normJoint('Heli-Coil') === 'helicoil' && C.normJoint('nut') === 'nut' && C.normJoint('bolt') === null, 'joint type names');
+  const pp = C.parsePoints('0, 0, tapped\n1, 0, M6, hc, 12.9\n2, 0, nut, tapped');
+  ok(pp.pts.length === 2 && pp.pts[0].joint === 'tapped' && pp.pts[1].joint === 'helicoil' && pp.pts[1].size === 'M6' && pp.pts[1].cls === '12.9' && pp.bad[0] === 3, 'joint column parsed, two joints rejected');
+  const inp = { joint: 'nut', thread: 'M10', plates: [{ mat: 'S235', t: 12 }, { mat: '6082T6', t: 25 }], engage: 15, tapMat: 'S235', hcLen: 1.5 };
+  const toT = C.jointParts(inp, 'tapped', 10);
+  ok(toT.plates.length === 1 && toT.tapMat === '6082T6' && toT.engage === 15 && toT.partT === 25, 'nut → tapped: last part becomes the tapped part (engagement ≤ 1.5 d)');
+  ok(C.sizeInput(inp, 'M10', null, null, 'helicoil').engage === 15, 'nut → Heli-Coil: coil length h·d');
+  const back = C.jointParts(Object.assign({}, inp, { joint: 'tapped', plates: [{ mat: 'S235', t: 12 }], tapMat: '6082T6', engage: 15 }), 'nut', 10);
+  ok(back.plates.length === 2 && back.plates[1].mat === '6082T6' && back.plates[1].t === 15, 'tapped → nut: tapped part clamped, as thick as the engagement');
+  ok(!!C.jointParts(Object.assign({}, inp, { plates: [{ mat: 'S235', t: 12 }] }), 'tapped', 10).jointError, 'nut → tapped with one part: error');
+  const round = C.jointParts(Object.assign({}, inp, toT), 'nut', 10);
+  ok(round.plates.length === 2 && round.plates[1].t === 25 && round.plates[1].mat === '6082T6', 'nut → tapped → nut keeps the part thickness');
+  ok(C.sizeInput({ thread: 'M10', insD: 14, insP: 1.5 }, 'M10').insD === 14, 'same size keeps the insert outer thread');
+  const ex = P.PRESETS.find(p => p.id === 'pat-joints').s;
+  const r = C.calculate(stateFrom(ex)), PT = r.pat;
+  ok(PT.mixed && PT.mixedJoint && !PT.mixedSize && !PT.mixedClass && PT.groups.length === 2, 'nut + tapped: two bolt types');
+  const gN = PT.groups.find(g => g.joint === 'nut'), gT = PT.groups.find(g => g.joint === 'tapped');
+  ok(gT.k > 1.5 * gN.k, 'the tapped screw (short clamp length) is much stiffer than the through-bolt');
+  ok(gT.r.valid && gT.r.esv && gT.r.lK < r.lK, 'the tapped type is checked as a screw joint with its shorter clamp length');
+  ok(PT.bolts[2].FA > PT.bolts[2].FAeq && PT.bolts[0].FA < PT.bolts[0].FAeq, 'stiffer tapped screws take more than equal sharing');
+  near(PT.bolts.reduce((s, b) => s + b.FA, 0), 30000, 1e-9, 'nut + tapped: Σ F_A = F_z');
+  ok(r.status !== 'error', 'mixed joint example passes');
+  const one = C.calculate(stateFrom(Object.assign({}, ex, { plates: [{ mat: 'S235', t: 12 }] })));
+  ok(one.issues.some(i => i.level === 'error' && /two clamped parts/.test(i.text)), 'tapped lines with one clamped part: error');
 }
 
 // ---- flexible flange (beam on elastic bolt supports) ----

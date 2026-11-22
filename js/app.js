@@ -67,20 +67,28 @@
     $('#pat-size-table').addEventListener('click', e => {
       const b = e.target.closest('[data-detail]');
       if (!b) return;
-      const oldSize = C.findThread(state.thread).id, oldCls = state.cls;
+      const oldSize = C.findThread(state.thread).id, oldCls = state.cls, oldJoint = state.joint;
+      const parts = b.dataset.detail.split(' '), newJoint = parts[2];
+      let jp = null;
+      if (newJoint !== oldJoint) {
+        // same stack of parts with the other joint type (the last part becomes / stops being the threaded part)
+        const o = C.jointParts(calcInput(), newJoint, C.findThread(parts[0]).d);
+        if (o.jointError) { alert('Cannot switch to this joint type: it ' + o.jointError + '.'); return; }
+        jp = o;
+      }
       state.patPts = String(state.patPts || '').split(/\r?\n/).map(l => {
         const s = l.replace(/#.*/, '').trim();
         if (!s || s.includes(';')) return l;
         const tok = s.split(/[\s,]+/).filter(Boolean);
         if (tok.length < 2) return l;
         const rest = tok.slice(2);
-        const hasSize = rest.some(t => /^m\d/i.test(t)), hasCls = rest.some(t => C.normClass(t));
-        const add = (hasSize ? '' : ', ' + oldSize) + (hasCls ? '' : ', ' + oldCls);
+        const hasSize = rest.some(t => /^m\d/i.test(t)), hasCls = rest.some(t => C.normClass(t)), hasJoint = rest.some(t => C.normJoint(t));
+        const add = (hasSize ? '' : ', ' + oldSize) + (hasCls ? '' : ', ' + oldCls) + (hasJoint || newJoint === oldJoint ? '' : ', ' + oldJoint);
         return add ? l.replace(/\s+$/, '') + add : l;
       }).join('\n');
-      const t = b.dataset.detail, i = t.indexOf(' ');
-      state.thread = t.slice(0, i);
-      state.cls = t.slice(i + 1);
+      if (jp) Object.assign(state, jp);
+      state.thread = parts[0];
+      state.cls = parts[1];
       adaptToThread();
       update();
       $('#pat-card').scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -370,7 +378,7 @@
     const MX = !!P.mixed;
     const head = '<thead><tr><th class="left">Bolt</th>' + (MX ? '<th class="left">Type</th>' : '') + '<th>x (mm)</th><th>y (mm)</th><th>Tension F<sub>A</sub> (kN)</th>' + (FX ? '<th>Rigid model (kN)</th>' : '') + (MX && P.weighted ? '<th>Equal sharing (kN)</th>' : '') + '<th>Shear F<sub>Q</sub> (kN)</th></tr></thead>';
     const rows = P.bolts.map(b => `<tr class="${b === P.critA && P.FAmax > 0 ? 'hl' : ''}"><td class="left">${b.i}${b === P.critA && P.FAmax > 0 ? ' <span class="badge">max tension</span>' : ''}${b === P.critQ && P.FQmax > 0 ? ' <span class="badge">max shear</span>' : ''}</td>` +
-      `${MX ? `<td class="left">${b.type}</td>` : ''}<td>${f(b.xu, 1)}</td><td>${f(b.yu, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td>${FX ? `<td>${f(b.FArigid / 1000, 3)}</td>` : ''}${MX && P.weighted ? `<td>${f(b.FAeq / 1000, 3)}</td>` : ''}<td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
+      `${MX ? `<td class="left">${b.label}</td>` : ''}<td>${f(b.xu, 1)}</td><td>${f(b.yu, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td>${FX ? `<td>${f(b.FArigid / 1000, 3)}</td>` : ''}${MX && P.weighted ? `<td>${f(b.FAeq / 1000, 3)}</td>` : ''}<td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
     $('#pat-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
     $('#pat-pts-info').innerHTML = P.custom ? P.n + ' bolts read' + (P.bad.length ? ', line ' + P.bad.join(', ') + ' ignored' : '') + '. Centroid C at (' + f(P.cx0, 1) + ', ' + f(P.cy0, 1) + ') mm.' : '';
     $('#pat-sizes').hidden = !MX;
@@ -382,7 +390,7 @@
         const rr = g.main ? r : g.r;
         const ok = rr && rr.valid;
         const stt = !ok ? 'error' : g.main ? worst(r.checks) : rr.status;
-        return `<tr class="${g.main ? 'hl' : ''}"><td class="left">${g.type}${g.main ? ' <span class="badge">section 1</span>' : ''}</td><td>${g.n}× (${g.bolts.map(b => b.i).join(', ')})</td>` +
+        return `<tr class="${g.main ? 'hl' : ''}"><td class="left">${g.label}${g.main ? ' <span class="badge">sections 1–3</span>' : ''}</td><td>${g.n}× (${g.bolts.map(b => b.i).join(', ')})</td>` +
           `<td>${isFinite(g.k) ? f(g.k / 1000, 0) : '—'}</td><td>${isFinite(g.As) ? f(g.As, 1) : '—'}</td><td class="strong">${f(g.FAmax / 1000, 2)}</td><td>${f(g.FQmax / 1000, 2)}</td>` +
           `<td>${ok ? f(rr.MA / 1000, rr.MA < 10000 ? 2 : 1) : '—'}</td><td>${ok ? f(rr.FKRmin / 1000, 2) : '—'}</td><td><span class="status ${stt}">${lbl[stt]}</span></td>` +
           `<td>${g.main ? '' : `<button type="button" class="btn-link" data-detail="${g.type}">Check in detail</button>`}</td></tr>`;
@@ -472,11 +480,11 @@
       if (PT.weighted) {
         const W = PT.weighted, gb = PT.critA;
         rows.splice(rows.length - 3, 2,
-          ['k<sub>i</sub> = 1/δ<sub>S</sub> + 1/δ<sub>P</sub> per bolt type, A<sub>S,i</sub>', PT.groups.map(g => g.type + ': ' + N(g.k / 1000, 0) + ' kN/mm, ' + N(g.As, 1) + ' mm²').join('; '), 'Σk = ' + N(W.K / 1000, 0) + ' kN/mm'],
+          ['k<sub>i</sub> = 1/δ<sub>S</sub> + 1/δ<sub>P</sub> per bolt type, A<sub>S,i</sub>', PT.groups.map(g => g.label + ': ' + N(g.k / 1000, 0) + ' kN/mm, ' + N(g.As, 1) + ' mm²').join('; '), 'Σk = ' + N(W.K / 1000, 0) + ' kN/mm'],
           ['G = Σk·(x, y)/Σk; M<sub>x,G</sub> = M<sub>x</sub> − F<sub>z</sub>·y<sub>G</sub>, M<sub>y,G</sub> = M<sub>y</sub> + F<sub>z</sub>·x<sub>G</sub>', 'G = (' + N(W.xG, 1) + ', ' + N(W.yG, 1) + ') mm from C', mm(W.MxG) + ', ' + mm(W.MyG) + ' N·m'],
           PT.method === 'heel'
-            ? ['F<sub>A,i</sub> = k<sub>i</sub>·F<sub>z</sub>/Σk + M·k<sub>i</sub>·h<sub>i</sub>/Σk·h²', 'bolt ' + gb.i + ' (' + gb.type + ')', kN(gb.FA)]
-            : ['F<sub>A,i</sub> = k<sub>i</sub>·(F<sub>z</sub>/Σk + b·x<sub>i</sub> + c·y<sub>i</sub>), Σkx²·b + Σkxy·c = −M<sub>y,G</sub>, Σkxy·b + Σky²·c = M<sub>x,G</sub> (x, y from G)', 'b = ' + sci(W.wb) + ', c = ' + sci(W.wc) + ' 1/mm; bolt ' + gb.i + ' (' + gb.type + ')', kN(gb.FA)],
+            ? ['F<sub>A,i</sub> = k<sub>i</sub>·F<sub>z</sub>/Σk + M·k<sub>i</sub>·h<sub>i</sub>/Σk·h²', 'bolt ' + gb.i + ' (' + gb.label + ')', kN(gb.FA)]
+            : ['F<sub>A,i</sub> = k<sub>i</sub>·(F<sub>z</sub>/Σk + b·x<sub>i</sub> + c·y<sub>i</sub>), Σkx²·b + Σkxy·c = −M<sub>y,G</sub>, Σkxy·b + Σky²·c = M<sub>x,G</sub> (x, y from G)', 'b = ' + sci(W.wb) + ', c = ' + sci(W.wc) + ' 1/mm; bolt ' + gb.i + ' (' + gb.label + ')', kN(gb.FA)],
           ['F<sub>Q,i</sub> = A<sub>i</sub>·|(F<sub>x</sub>/ΣA − M<sub>z,S</sub>·y<sub>i</sub>/J, F<sub>y</sub>/ΣA + M<sub>z,S</sub>·x<sub>i</sub>/J)|, J = ΣA·r², S = area centroid', 'S = (' + N(W.xS, 1) + ', ' + N(W.yS, 1) + ') mm, M<sub>z,S</sub> = ' + mm(W.MzS) + ' N·m', 'bolt ' + PT.critQ.i + ': ' + kN(PT.critQ.FQ)]);
       }
       step('Pattern', 'Bolt pattern load distribution (' + (PT.flex ? 'flexible flange' : 'rigid flange') + ')', rows, PT.flex

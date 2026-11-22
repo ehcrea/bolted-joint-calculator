@@ -10,7 +10,7 @@
  *   the cache.
  */
 'use strict';
-const CACHE = "bolted-joint-calculator-85d3db32d497";
+const CACHE = "bolted-joint-calculator-62c221808151";
 const PREFIX = "bolted-joint-calculator-";
 const FILES = [
   "css/style.css",
