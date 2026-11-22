@@ -10,16 +10,17 @@
  *   the cache.
  */
 'use strict';
-const CACHE = "bolted-joint-calculator-62c221808151";
+const CACHE = "bolted-joint-calculator-a01cdfb32529";
 const PREFIX = "bolted-joint-calculator-";
 const FILES = [
   "css/style.css",
-  "icons/apple-touch-icon.png",
+  "icons/app-icon-180.png",
+  "icons/app-icon-192.png",
+  "icons/app-icon-512.png",
+  "icons/app-icon-maskable-512.png",
+  "icons/app-icon.svg",
   "icons/favicon-32.png",
   "icons/favicon.svg",
-  "icons/icon-192.png",
-  "icons/icon-512.png",
-  "icons/icon-maskable-512.png",
   "./",
   "js/app.js",
   "js/calc.js",
