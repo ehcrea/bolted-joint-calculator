@@ -1,5 +1,5 @@
 {
-  "id": "./",
+  "id": "/bolted-joint-calculator/",
   "name": "Bolted Joint Calculator",
   "short_name": "Bolt Calc",
   "description": "Preload, tightening torque and VDI 2230 checks for bolted joints.",
