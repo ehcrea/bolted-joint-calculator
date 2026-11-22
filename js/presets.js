@@ -85,6 +85,12 @@
       plates: [{ mat: '6061T6', t: 3 }, { mat: '1.4301', t: 10 }], tapMat: '6061T6', hcLen: 2, DA: 10, rough: 'fine', friction: 'ss-paste',
       method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.1, FAmin: 0, FQ: 0.05, muT: 0.15, dT: -55 } },
     // Bolt patterns: loads on the whole flange, distributed with the rigid-flange model.
+    { id: 'pat-classes', label: 'M10 8.8 bracket, top row upgraded to 12.9 (mixed property classes)', s: {
+      joint: 'nut', thread: 'M10', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 20 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FQ: 0, n: 0.5,
+      patOn: true, patType: 'custom', patPts: '0, 0\n100, 0\n200, 0\n0, 80, 12.9\n100, 80, 12.9\n200, 80, 12.9', patEdge: 15,
+      patFz: 30, patXF: 100, patYF: 40, patMx: 3000, patFy: 6, patR: 0.6 } },
     { id: 'pat-flange', label: 'M8 10.9, 6-bolt circular flange (Ø80 PCD), bending + torsion', s: {
       joint: 'tapped', thread: 'M8', cls: '10.9', head: 'shcs', washer: 'none', plates: [{ mat: '42CrMo4', t: 12 }],
       tapMat: 'C45', engage: 12, rough: 'medium', friction: 'oxide-oil', method: 'tw-test', nu: 0.9, muT: 0.15, n: 0.5,

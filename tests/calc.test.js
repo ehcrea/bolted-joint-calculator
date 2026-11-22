@@ -322,11 +322,37 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(m6.r && m6.r.valid && m6.r.g.d === 6, 'the other size is checked on its own');
   near(m6.r.FAmax, m6.FAmax, 1e-9, 'sub-check uses the group maximum tension');
   const fail = C.calculate(stateFrom(Object.assign({}, base, { patPts: mixPts, patFz: 40, patMx: 1500 })));
-  ok(fail.issues.some(i => i.level === 'error' && /^M6 bolts/.test(i.text)), 'a failing other size is reported');
+  ok(fail.issues.some(i => i.level === 'error' && /^M6 10\.9 bolts/.test(i.text)), 'a failing other size is reported');
   const none = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0, M8\n100, 0, M8\n50, 60, M12' })));
-  ok(none.issues.some(i => /no bolt in the pattern has the size from section 1/.test(i.text)), 'section-1 size not used: warned');
+  ok(none.issues.some(i => /no bolt in the pattern is the M10 10\.9 from section 1/.test(i.text)), 'section-1 size not used: warned');
   const si = C.sizeInput({ thread: 'M10', engage: 15, mode: 'torque', MA: 50, holeFit: 'custom', dhCustom: 11 }, 'M6');
   ok(si.thread === 'M6' && Math.abs(si.engage - 9) < 1e-9 && si.mode === 'nu' && Math.abs(si.dhCustom - 6.6) < 1e-9 && !si.patOn, 'size input scales engagement and hole, torque → ν');
+}
+
+// ---- different property classes in one pattern ----
+{
+  ok(C.normClass('12.9') === '12.9' && C.normClass('a4-70') === 'A2-70' && C.normClass('A2-80') === 'A4-80' && C.normClass('ti5') === 'Ti5' && C.normClass('9.9') === null, 'property class names and aliases');
+  const pp = C.parsePoints('0, 0, M6, 12.9\n1, 0, 12.9, M6\n2, 0, A4-70\n3, 0, M6, M8\n4, 0, 12.9, 8.8\n5, 0, 9.9');
+  ok(pp.pts.length === 3 && pp.pts[0].size === 'M6' && pp.pts[0].cls === '12.9' && pp.pts[1].size === 'M6' && pp.pts[1].cls === '12.9' && !pp.pts[2].size && pp.pts[2].cls === 'A2-70', 'size and class in either order');
+  ok(pp.bad.join() === '4,5,6', 'two sizes, two classes or an unknown class are rejected');
+  const base = { joint: 'nut', thread: 'M10', cls: '8.8', plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 20 }], FQ: 0, washerGrade: '300HV',
+    patOn: true, patType: 'custom', patEdge: 15, patFz: 30, patXF: 100, patYF: 40, patMx: 3000, patFy: 6, patR: 0.6 };
+  const all = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0\n100, 0\n200, 0\n0, 80\n100, 80\n200, 80' })));
+  const up = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0\n100, 0\n200, 0\n0, 80, 12.9\n100, 80, 12.9\n200, 80, 12.9' })));
+  ok(up.pat.mixed && up.pat.mixedClass && !up.pat.mixedSize && up.pat.groups.length === 2, 'same size, two classes: two bolt types');
+  const g129 = up.pat.groups.find(g => g.cls === '12.9');
+  ok(g129 && g129.r.valid && g129.r.bc.key === '12.9' && g129.r.g.d === 10, 'the 12.9 bolts are checked as 12.9');
+  near(g129.k, up.pat.groups.find(g => g.cls === '8.8').k, 1e-9, 'steel classes have the same stiffness (same E)');
+  all.pat.bolts.forEach((b, i) => near(up.pat.bolts[i].FA, b.FA, 1e-9, 'equal stiffness: sharing unchanged, bolt ' + b.i));
+  ok(all.status === 'error' && up.status !== 'error', 'upgrading the loaded row to 12.9 makes the pattern pass');
+  ok(up.issues.some(i => /look alike/.test(i.text)), 'same size, different class: marking note');
+  const ss = C.calculate(stateFrom(Object.assign({}, base, { friction: 'ss-paste', patFz: 6, patMx: 300, patFy: 1, patPts: '0, 0\n100, 0\n200, 0\n0, 80, A2-70\n100, 80, A2-70\n200, 80, A2-70' }))).pat;
+  const kS = ss.groups.find(g => g.cls === 'A2-70').k, kC = ss.groups.find(g => g.cls === '8.8').k;
+  ok(kS < kC, 'stainless bolts (lower E) are a little softer and take a little less');
+  const none = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0, 10.9\n100, 0, 10.9\n50, 60, 10.9' })));
+  ok(none.issues.some(i => /no bolt in the pattern is the M10 8\.8 from section 1/.test(i.text)), 'section-1 bolt type not used: warned');
+  const si = C.sizeInput({ thread: 'M10', cls: '8.8' }, 'M10', null, '12.9');
+  ok(si.cls === '12.9' && si.thread === 'M10', 'size input sets the class');
 }
 
 // ---- flexible flange (beam on elastic bolt supports) ----

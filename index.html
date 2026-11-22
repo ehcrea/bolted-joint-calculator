@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=32">
+  <link rel="stylesheet" href="css/style.css?v=33">
   <script>
     try { const t = (localStorage.getItem('ehcrea.theme') || localStorage.getItem('bolt.theme')); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -241,8 +241,8 @@
           </div>
           <label class="check" data-show="pat-rect"><input type="checkbox" data-key="patPerimeter"> Bolts on the perimeter only</label>
           <div data-show="pat-custom">
-            <label><span class="lt">Bolt positions x, y [, size] <span class="tip" tabindex="0" title="One bolt per line, x and y in mm from any origin you like (e.g. a drawing datum), optionally followed by a thread size (e.g. 0, 0, M6) for bolts that differ from section 1. Separate with a comma, space or tab, so two columns pasted from a spreadsheet work. Lines starting with # are ignored. The tool works about the bolt-group centroid.">ⓘ</span></span> <span class="u">(mm, one bolt per line)</span>
-              <textarea data-key="patPts" data-text rows="6" spellcheck="false" placeholder="0, 0&#10;80, 0&#10;80, 60, M6&#10;0, 60, M6"></textarea></label>
+            <label><span class="lt">Bolt positions x, y [, size, class] <span class="tip" tabindex="0" title="One bolt per line, x and y in mm from any origin you like (e.g. a drawing datum), optionally followed by a thread size and/or a property class (e.g. 0, 0, M6 or 0, 0, M6, 12.9 or 0, 0, A4-70) for bolts that differ from section 1. Separate with a comma, space or tab, so two columns pasted from a spreadsheet work. Lines starting with # are ignored. The tool works about the bolt-group centroid.">ⓘ</span></span> <span class="u">(mm, one bolt per line)</span>
+              <textarea data-key="patPts" data-text rows="6" spellcheck="false" placeholder="0, 0&#10;80, 0&#10;80, 60, M6&#10;0, 60, M6, 12.9"></textarea></label>
             <p class="hint" id="pat-pts-info"></p>
             <div class="pat-fill">Start from: <button type="button" class="btn-link" data-fill="circle">current circle</button> · <button type="button" class="btn-link" data-fill="rect">current grid</button></div>
             <div class="grid2">
@@ -322,8 +322,8 @@
         <div class="drawing" id="pat-view"></div>
         <div class="table-wrap"><table class="data" id="pat-table"></table></div>
         <div id="pat-sizes" hidden>
-          <h3 class="sub">Bolt sizes in the pattern</h3>
-          <p class="card-note">Tension is shared in proportion to each bolt's joint stiffness k = 1/δ<sub>S</sub> + 1/δ<sub>P</sub>, shear in proportion to its stress area A<sub>S</sub>. Every size is checked with VDI 2230 under its own highest loads; the detailed results below are for the size from section 1.</p>
+          <h3 class="sub">Bolt types in the pattern</h3>
+          <p class="card-note">Tension is shared in proportion to each bolt's joint stiffness k = 1/δ<sub>S</sub> + 1/δ<sub>P</sub>, shear in proportion to its stress area A<sub>S</sub>. Every bolt type (size and property class) is checked with VDI 2230 under its own highest loads; the detailed results below are for the bolt from section 1.</p>
           <div class="table-wrap"><table class="data" id="pat-size-table"></table></div>
         </div>
         <div id="pat-flex" hidden>
@@ -467,11 +467,13 @@
       <li><b>Tension</b> F<sub>z</sub> is shared equally; bending adds M·y<sub>i</sub>/Σy² about the bolt-group centroid (<b>centroid model</b>, valid while the preloaded joint stays closed; for unsymmetric patterns with Σxy ≠ 0 the tool solves Σx²·b + Σxy·c = −M<sub>y</sub>, Σxy·b + Σy²·c = M<sub>x</sub> and uses F<sub>A,i</sub> = F<sub>z</sub>/n + b·x<sub>i</sub> + c·y<sub>i</sub>; bolts on one line cannot carry the moment about that line, which is flagged) or M·h<sub>i</sub>/Σh² about the flange edge (<b>heel model</b>, for a joint that has opened or for ultimate loads; for custom patterns the edge lies the given distance beyond the outermost bolt).</li>
       <li>The bolt with the highest tension and the highest shear are combined into one design bolt (conservative if they are different bolts), which runs through all the checks.</li>
     </ul>
-    <p><b>Mixed bolt sizes</b> (custom positions). Add a thread size after a bolt's coordinates, e.g. <code>80, 0, M6</code>; lines without a size use the bolt from section 1. A stiffer bolt takes a larger share of the load, so with mixed sizes:</p>
+    <p><b>Mixed bolt sizes and property classes</b> (custom positions). Add a thread size and/or a property class after a bolt's coordinates, in either order: <code>80, 0, M6</code>, <code>80, 0, 12.9</code> or <code>80, 0, M6, A4-70</code>. What a line leaves out comes from section 1. A stiffer bolt takes a larger share of the load, so with mixed bolts:</p>
     <ul>
       <li><b>Tension</b> is shared in proportion to each bolt's joint stiffness k = 1/δ<sub>S</sub> + 1/δ<sub>P</sub> (VDI 2230 resiliences of that size in the same joint), about the stiffness-weighted centroid G: F<sub>A,i</sub> = k<sub>i</sub>·(F<sub>z</sub>/Σk + b·x<sub>i</sub> + c·y<sub>i</sub>). With the heel model: k<sub>i</sub>·F<sub>z</sub>/Σk + M·k<sub>i</sub>·h<sub>i</sub>/Σk·h².</li>
       <li><b>Shear</b> is shared in proportion to the stress area A<sub>S</sub> about the area-weighted centroid (the usual elastic method for bolt groups of different diameters).</li>
-      <li><b>Every size is checked</b> with the full VDI 2230 method under its own highest tension and shear, with the same parts, friction and tightening method. A failing size is reported at the top. The detailed results are for the size from section 1; <i>Check in detail</i> opens another size (the other lines keep their size).</li>
+      <li><b>Every bolt type</b> (size and class) <b>is checked</b> with the full VDI 2230 method under its own highest tension and shear, with the same parts, friction and tightening method. A failing type is reported at the top. The detailed results are for the bolt from section 1; <i>Check in detail</i> opens another type (the other lines get their size and class written out, so the pattern does not change).</li>
+      <li><b>Property class</b> changes the strength and the preload, and the stiffness only through E: steel classes share load equally, stainless (E ≈ 193 GPa) and titanium (E ≈ 114 GPa) bolts are softer and take a little less. A typical use is upgrading only the most loaded bolts (e.g. one row to 12.9). Bolts of the same size but different class look alike, so mark them and control them in assembly.</li>
+      <li>Mixing stainless or titanium with steel bolts brings the galling and friction warnings of that class into the check of its type (e.g. a stainless bolt with a friction option for steel).</li>
       <li>Inputs that scale with the bolt (engagement length, custom hole) are scaled by d for the other sizes. A given torque applies to the section-1 size only; the other sizes are tightened to ν.</li>
     </ul>
     <p class="about-meta">The joint stiffness depends on the parts as well as the bolt, so a bolt twice the size does not take four times the load. Equal joint stiffness is assumed for bolts of the same size.</p>
@@ -550,10 +552,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=32"></script>
-  <script src="js/calc.js?v=32"></script>
-  <script src="js/presets.js?v=32"></script>
-  <script src="js/drawing.js?v=32"></script>
-  <script src="js/app.js?v=32"></script>
+  <script src="js/data.js?v=33"></script>
+  <script src="js/calc.js?v=33"></script>
+  <script src="js/presets.js?v=33"></script>
+  <script src="js/drawing.js?v=33"></script>
+  <script src="js/app.js?v=33"></script>
 </body>
 </html>
