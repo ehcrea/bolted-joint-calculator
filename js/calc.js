@@ -93,8 +93,15 @@
     String(text || '').split(/\r?\n/).flatMap(l => (l.includes(',') && l.includes(';') ? l.split(';') : [l])).forEach((line, i) => {
       const s = line.replace(/#.*/, '').trim();
       if (!s) return;
-      const m = s.split(/[\s,;]+/).filter(Boolean).map(Number);
-      if (m.length >= 2 && isFinite(m[0]) && isFinite(m[1])) pts.push({ x: m[0], y: m[1] });
+      const tok = s.split(/[\s,;]+/).filter(Boolean);
+      const m = tok.slice(0, 2).map(Number);
+      let size = null, ok = tok.length >= 2 && isFinite(m[0]) && isFinite(m[1]);
+      if (ok && tok.length >= 3) {                       // optional thread size, e.g. M6 or M10x1.25
+        const id = tok[2].replace(/^m/, 'M').replace(/[×X]/g, 'x');
+        const th = D.threadList().find(t => t.id === id);
+        if (th) size = th.id; else ok = false;
+      }
+      if (ok) pts.push(size ? { x: m[0], y: m[1], size } : { x: m[0], y: m[1] });
       else bad.push(i + 1);
     });
     return { pts, bad };
@@ -108,7 +115,7 @@
       const pp = parsePoints(inp.patPts);
       const n = pp.pts.length;
       const cx = n ? pp.pts.reduce((s, p) => s + p.x, 0) / n : 0, cy = n ? pp.pts.reduce((s, p) => s + p.y, 0) / n : 0;
-      pts = pp.pts.map(p => ({ x: p.x - cx, y: p.y - cy }));
+      pts = pp.pts.map(p => ({ x: p.x - cx, y: p.y - cy, size: p.size || null }));
       pts.cx = cx; pts.cy = cy; pts.bad = pp.bad;
       return pts;
     }
@@ -193,7 +200,10 @@
   // Loads: forces in kN, moments in N·m (converted to N and N·mm).
   // F_z acts at (x_F, y_F); its offset adds M_x = F_z·y_F and M_y = −F_z·x_F about the centroid.
   // stiff (optional) = { k } switches the rectangular pattern to the flexible-flange model along x.
-  function boltPattern(inp, stiff) {
+  // wts (optional, mixed bolt sizes): { k: [...], A: [...] } per bolt. Tension is shared by the joint stiffness k
+  // about the stiffness-weighted centroid, shear by the stress area A about the area-weighted centroid.
+  // With equal weights both reduce to the formulas above.
+  function boltPattern(inp, stiff, wts) {
     const pts = patternBolts(inp), n = pts.length;
     const Fx = (+inp.patFx || 0) * 1000, Fy = (+inp.patFy || 0) * 1000, Fz = (+inp.patFz || 0) * 1000;
     const xF = (+inp.patXF || 0) - pts.cx, yF = (+inp.patYF || 0) - pts.cy;      // relative to the centroid
@@ -232,6 +242,40 @@
       const qx = Fx / n - (Sr2 > 0 ? Mz * p.y / Sr2 : 0), qy = Fy / n + (Sr2 > 0 ? Mz * p.x / Sr2 : 0);
       return { i: i + 1, x: p.x, y: p.y, xu: p.x + pts.cx, yu: p.y + pts.cy, h: p.h, FA, FAt: Math.max(0, FA), qx, qy, FQ: Math.hypot(qx, qy) };
     });
+    const mainId = findThread(inp.thread).id;
+    bolts.forEach((b, i) => { b.size = pts[i].size || mainId; });
+    let weighted = null;
+    if (wts) {
+      const k = wts.k, A = wts.A, sum = a => a.reduce((s, v) => s + v, 0);
+      const K = sum(k), xG = sum(pts.map((p, i) => k[i] * p.x)) / K, yG = sum(pts.map((p, i) => k[i] * p.y)) / K;
+      const MxG = Mx - Fz * yG, MyG = My + Fz * xG;                       // moments moved to the stiffness centroid G
+      let sxx = 0, syy = 0, sxy = 0;
+      pts.forEach((p, i) => { const X = p.x - xG, Y = p.y - yG; sxx += k[i] * X * X; syy += k[i] * Y * Y; sxy += k[i] * X * Y; });
+      const dt = sxx * syy - sxy * sxy, s2 = sxx + syy;
+      let wb = 0, wc = 0, wUn = 0;
+      if (s2 > 0 && dt > 1e-9 * s2 * s2) { wb = (-MyG * syy - MxG * sxy) / dt; wc = (MxG * sxx + MyG * sxy) / dt; }
+      else if (s2 > 0) {
+        const th = 0.5 * Math.atan2(2 * sxy, sxx - syy), ex = Math.cos(th), ey = Math.sin(th);
+        const Ss2 = sum(pts.map((p, i) => k[i] * Math.pow((p.x - xG) * ex + (p.y - yG) * ey, 2)));
+        const kk = (-MyG * ex + MxG * ey) / Ss2;
+        wb = kk * ex; wc = kk * ey; wUn = Math.abs(MyG * ey + MxG * ex);
+      } else wUn = Math.hypot(MxG, MyG);
+      const Skh2 = method === 'heel' ? sum(bolts.map((b, i) => k[i] * b.h * b.h)) : 0;
+      const AS = sum(A), xS = sum(pts.map((p, i) => A[i] * p.x)) / AS, yS = sum(pts.map((p, i) => A[i] * p.y)) / AS;
+      const MzS = Mz - xS * Fy + yS * Fx;                                   // torsion moved to the area centroid S
+      const J = sum(pts.map((p, i) => A[i] * ((p.x - xS) ** 2 + (p.y - yS) ** 2)));
+      bolts.forEach((b, i) => {
+        b.FAeq = b.FA; b.FQeq = b.FQ; b.k = k[i]; b.A = A[i];
+        b.FA = method === 'heel' ? k[i] * Fz / K + (Skh2 > 0 ? Mb * k[i] * b.h / Skh2 : 0) : k[i] * (Fz / K + wb * (b.x - xG) + wc * (b.y - yG));
+        b.FAt = Math.max(0, b.FA);
+        const X = b.x - xS, Y = b.y - yS;
+        b.qx = Fx * A[i] / AS - (J > 0 ? MzS * A[i] * Y / J : 0);
+        b.qy = Fy * A[i] / AS + (J > 0 ? MzS * A[i] * X / J : 0);
+        b.FQ = Math.hypot(b.qx, b.qy);
+      });
+      unresisted = method === 'centroid' ? wUn : 0;
+      weighted = { K, xG, yG, MxG, MyG, sxx, syy, sxy, wb, wc, Skh2, AS, xS, yS, MzS, J };
+    }
     // flexible flange (rectangular pattern, joint closed): x direction from the beam on elastic supports, y rigid
     let flex = null;
     if (stiff && inp.patType === 'rect' && method === 'centroid') {
@@ -258,9 +302,22 @@
     const ratio = Math.min(1, Math.max(0, +inp.patR || 0));
     const rigidMax = flex ? Math.max(0, ...bolts.map(b => b.FArigid)) : null;
     return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Mx0, My0, xF, yF, Sx2, Sy2, Sxy, Sr2, Sh2, det, bx, cy: cy_, lineDir, unresisted,
-      custom: inp.patType === 'custom', cx0: pts.cx, cy0: pts.cy, bad: pts.bad, c, u, Mb, critA, critQ, flex, rigidMax,
+      custom: inp.patType === 'custom', cx0: pts.cx, cy0: pts.cy, bad: pts.bad, c, u, Mb, critA, critQ, flex, rigidMax, weighted, mainId,
       FAmax: Math.max(0, critA.FA), FQmax: critQ.FQ, ratio, sameBolt: critA.FQ >= critQ.FQ * (1 - 1e-9),
       compression: bolts.some(b => b.FA < 0) };
+  }
+
+  // Input for checking another bolt size of a mixed pattern with the same joint: length-type inputs that scale
+  // with the bolt (engagement, custom hole) are scaled by d; a given torque belongs to the main bolt, so the
+  // other sizes are tightened to the utilisation ν instead; insert outer threads fall back to their defaults.
+  function sizeInput(inp, size, extra) {
+    const f = findThread(size).d / findThread(inp.thread).d;
+    const o = Object.assign({}, inp, { thread: size, patOn: false }, extra || {});
+    if (+inp.engage > 0) o.engage = +inp.engage * f;
+    if (inp.holeFit === 'custom' && +inp.dhCustom > 0) o.dhCustom = +inp.dhCustom * f;
+    o.insD = ''; o.insP = '';
+    if (inp.mode === 'torque') o.mode = 'nu';
+    return o;
   }
 
   // ---------------- main ----------------
@@ -277,12 +334,49 @@
         const one = calculate(Object.assign({}, inp, { patOn: false, pryOn: false, eccOn: false, nasa: false, FAmax: 0, FAmin: 0, FQ: 0 }));
         if (one.valid) stiff = { k: 1 / one.res.deltaS + 1 / one.res.deltaP, deltaS: one.res.deltaS, deltaP: one.res.deltaP };
       }
-      pat = boltPattern(inp, stiff);
+      // mixed bolt sizes (custom positions with a size column): weights from each size's joint stiffness and stress area
+      const mainId = findThread(inp.thread).id;
+      const ptsS = patternBolts(inp);
+      const sizes = [...new Set(ptsS.map(p => p.size || mainId))];
+      const mixed = inp.patType === 'custom' && (sizes.length > 1 || sizes[0] !== mainId);
+      let wts = null, plain = null;
+      if (mixed && ptsS.length >= 2) {
+        plain = {};
+        sizes.forEach(s => { plain[s] = calculate(sizeInput(inp, s, { pryOn: false, eccOn: false, nasa: false, FAmax: 0, FAmin: 0, FQ: 0 })); });
+        if (sizes.every(s => plain[s].valid)) {
+          const kOf = s => 1 / plain[s].res.deltaS + 1 / plain[s].res.deltaP;
+          wts = { k: ptsS.map(p => kOf(p.size || mainId)), A: ptsS.map(p => plain[p.size || mainId].g.As) };
+        }
+      }
+      pat = boltPattern(inp, stiff, wts);
       if (stiff) pat.stiff = stiff;
+      if (mixed) {
+        pat.mixed = true;
+        pat.groups = sizes.map(s => {
+          const bs = pat.bolts.filter(b => b.size === s);
+          const FA = Math.max(0, ...bs.map(b => b.FA)), FQ = Math.max(0, ...bs.map(b => b.FQ));
+          return { size: s, d: findThread(s).d, main: s === mainId, bolts: bs, n: bs.length, FAmax: FA, FQmax: FQ,
+            k: plain && plain[s].valid ? 1 / plain[s].res.deltaS + 1 / plain[s].res.deltaP : NaN, As: plain && plain[s].valid ? plain[s].g.As : NaN };
+        }).sort((a, b) => a.d - b.d || (a.size < b.size ? -1 : 1));
+        const mg = pat.groups.find(g => g.main);
+        if (mg) { pat.FAmax = mg.FAmax; pat.FQmax = mg.FQmax; pat.critA = mg.bolts.reduce((a, b) => (b.FA > a.FA ? b : a), mg.bolts[0]); pat.critQ = mg.bolts.reduce((a, b) => (b.FQ > a.FQ ? b : a), mg.bolts[0]); pat.sameBolt = pat.critA === pat.critQ || pat.critA.FQ >= pat.critQ.FQ * (1 - 1e-9); if (pat.sameBolt) pat.critQ = pat.critA; }
+        else add('warn', 'Mixed bolt sizes: no bolt in the pattern has the size from section 1 (' + mainId + '), so the detailed results below are for an ' + mainId + ' under the highest load of the pattern. Each size used is checked in the table of the bolt pattern card; open one with “Check in detail”.');
+        // full check of every other size under its own worst loads
+        pat.groups.filter(g => !g.main).forEach(g => {
+          const sub = calculate(sizeInput(inp, g.size, { FAmax: g.FAmax / 1000, FAmin: pat.ratio * g.FAmax / 1000, FQ: g.FQmax / 1000 }));
+          g.r = sub;
+          if (!sub.valid) { add('error', g.size + ' bolts in the pattern: ' + ((sub.issues[0] || {}).text || 'no valid result')); return; }
+          const bad = sub.checks.find(c => c.status === 'error'), warnC = sub.checks.find(c => c.status === 'warn');
+          const badI = sub.issues.find(i => i.level === 'error');
+          if (bad || badI) add('error', g.size + ' bolts in the pattern (' + g.n + '×) fail: ' + (bad ? bad.id + ' ' + bad.label : badI.text) + '. Open them with “Check in detail”.');
+          else if (sub.status === 'warn') add('warn', g.size + ' bolts in the pattern (' + g.n + '×) need a check: ' + (warnC ? warnC.id + ' ' + warnC.label : (sub.issues.find(i => i.level === 'warn') || {}).text) + '.');
+        });
+        if (inp.mode === 'torque' && pat.groups.some(g => !g.main)) add('info', 'Mixed bolt sizes: the given torque applies to the ' + mainId + ' bolts. The other sizes are checked tightened to ν = ' + fmtN((+inp.nu || 0.9) * 100, 0) + ' % with their own torque (see the table).');
+      }
       if (wantFlex && !pat.flex) add('warn', 'Flexible flange: needs a rectangular pattern with at least two bolt columns along x, the centroid model (joint closed) and a flange thickness. The rigid model is used.');
       inp = Object.assign({}, inp, { FAmax: pat.FAmax / 1000, FAmin: pat.ratio * pat.FAmax / 1000, FQ: pat.FQmax / 1000 });
       if (pat.n < 2) add('error', 'The bolt pattern needs at least two bolts' + (pat.custom ? ': enter one bolt per line as x, y (mm).' : '.'));
-      if (pat.bad && pat.bad.length) add('warn', 'Custom bolt positions: line ' + pat.bad.join(', ') + ' could not be read and is ignored. Enter x, y in mm, one bolt per line.');
+      if (pat.bad && pat.bad.length) add('warn', 'Custom bolt positions: line ' + pat.bad.join(', ') + ' could not be read and is ignored. Enter x, y in mm, one bolt per line, optionally followed by a size such as M6.');
       if (pat.method === 'centroid' && pat.unresisted > 1e-6 * (Math.abs(pat.Mx) + Math.abs(pat.My) + 1)) add('warn', 'Bolt pattern: all bolts lie on one line, so the moment about that line (' + fmtN(pat.unresisted / 1000, 1) + ' N·m) cannot be carried by bolt tension in the centroid model. It must be taken by contact at the flange edge: use the heel model or add bolts off the line.');
       if (!pat.sameBolt && pat.FQmax > 0 && pat.FAmax > 0) add('info', 'Bolt pattern: the highest tension (bolt ' + pat.critA.i + ') and the highest shear (bolt ' + pat.critQ.i + ') are on different bolts. Both maxima are applied to one bolt, which is conservative.');
       if (pat.method === 'centroid' && pat.compression && pat.Mb > 0) add('info', 'Bolt pattern: bending is taken about the bolt-group centroid, which assumes the joint stays closed (check that the residual clamp load stays positive). For a joint that may open, or for ultimate loads, use the heel model.');
@@ -859,7 +953,7 @@
     return dec > 0 ? s.replace(/\.?0+$/, '') || '0' : s;
   }
 
-  const CALC = { calculate, boltPattern, patternBolts, parsePoints, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
+  const CALC = { calculate, boltPattern, patternBolts, parsePoints, sizeInput, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
   if (typeof module !== 'undefined' && module.exports) module.exports = CALC;
   else root.BJ_CALC = CALC;
 })(typeof window !== 'undefined' ? window : globalThis);

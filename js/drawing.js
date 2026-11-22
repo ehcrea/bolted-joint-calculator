@@ -450,7 +450,9 @@
     // bolts
     const maxQ = Math.max(...P.bolts.map(b => b.FQ), 1e-9);
     const rb = Math.max(7, r.dW / 2 * sc);
+    const rbOf = b => P.mixed ? Math.max(5, rb * root.BJ_CALC.findThread(b.size).d / r.g.d) : rb;
     P.bolts.forEach(b => {
+      const rb = rbOf(b);
       const t = P.FAmax > 0 ? b.FAt / P.FAmax : 0;
       const crit = b === P.critA && P.FAmax > 0;
       out.push(`<circle cx="${r1(X(b.x))}" cy="${r1(Y(b.y))}" r="${r1(rb)}" class="pat-bolt${crit ? ' crit' : ''}" style="fill-opacity:${(0.08 + 0.8 * t).toFixed(2)}"/>`);
@@ -460,7 +462,10 @@
         const x0 = X(b.x) + ux * rb, y0 = Y(b.y) - uy * rb;
         out.push(`<line x1="${r1(x0)}" y1="${r1(y0)}" x2="${r1(x0 + ux * len)}" y2="${r1(y0 - uy * len)}" class="pat-shear" marker-end="url(#${id}-q)"/>`);
       }
-      const ang = Math.atan2(b.y, b.x), lr = rb + 13;
+      let ang = Math.atan2(b.y, b.x);
+      const lr = rb + 13;
+      // keep the value clear of the shear arrow: turn it aside when both point the same way
+      if (b.FQ > 0 && Math.hypot(b.x, b.y) > 0 && Math.cos(ang) * b.qx / b.FQ + Math.sin(ang) * b.qy / b.FQ > 0.7) ang += (b.x >= 0 ? -1 : 1) * Math.PI / 2;
       const tx = X(b.x) + (Math.hypot(b.x, b.y) > 0 ? Math.cos(ang) : 1) * lr, ty = Y(b.y) - (Math.hypot(b.x, b.y) > 0 ? Math.sin(ang) : 0) * lr;
       const anchor = Math.cos(ang) > 0.3 ? 'start' : Math.cos(ang) < -0.3 ? 'end' : 'middle';
       out.push(`<text x="${r1(tx)}" y="${r1(ty + 4)}" text-anchor="${anchor}" class="pat-val${crit ? ' crit' : ''}">${f(b.FA / 1000, 2)}</text>`);

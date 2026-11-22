@@ -96,6 +96,12 @@
       nu: 0.9, FQ: 0, n: 0.5,
       patOn: true, patType: 'custom', patPts: '0, 0\n70, 0\n140, 10\n0, 60\n100, 80', patEdge: 15,
       patFz: 6, patXF: 130, patYF: 70, patFy: 2, patMz: 60, patR: 0 } },
+    { id: 'pat-mixed', label: 'M10 + M6 10.9, 6-bolt base with mixed bolt sizes (load shared by stiffness)', s: {
+      joint: 'nut', thread: 'M10', cls: '10.9', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 20 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FQ: 0, n: 0.5,
+      patOn: true, patType: 'custom', patPts: '0, 0\n160, 0\n0, 100\n160, 100\n80, 0, M6\n80, 100, M6', patEdge: 15,
+      patFz: 12, patXF: 80, patYF: 50, patMx: 400, patFy: 3, patMz: 120, patR: 0 } },
     { id: 'pat-strip', label: 'M8 8.8, 5 bolts in a row, 10 mm flange with a local load (flexible flange)', s: {
       joint: 'nut', thread: 'M8', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '200HV', washerNut: true,
       plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 20 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',

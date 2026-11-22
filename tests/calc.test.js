@@ -289,6 +289,46 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(bad.issues.some(i => i.level === 'error'), 'custom pattern with one bolt is an error');
 }
 
+// ---- mixed bolt sizes in one pattern ----
+{
+  const pp = C.parsePoints('0, 0, M6\n10 0 m10x1.25\n5, 5, M7\n3, 3');
+  ok(pp.pts.length === 3 && pp.pts[0].size === 'M6' && pp.pts[1].size === 'M10x1.25' && !pp.pts[2].size && pp.bad[0] === 3, 'size column parsed; unknown size rejected');
+  const base = { thread: 'M10', cls: '10.9', plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 20 }], FQ: 0, patOn: true, patType: 'custom', patR: 0,
+    patFz: 12, patXF: 80, patYF: 50, patMx: 400, patMy: -150, patFx: 1, patFy: 3, patMz: 120 };
+  const plainPts = '0, 0\n160, 0\n0, 100\n160, 100\n80, 0\n80, 100';
+  const mixPts = '0, 0\n160, 0\n0, 100\n160, 100\n80, 0, M6\n80, 100, M6';
+  // equal weights reproduce the unweighted formulas (centroid and heel)
+  for (const method of ['centroid', 'heel']) {
+    const s = stateFrom(Object.assign({}, base, { patPts: '0, 0\n70, 0\n140, 10\n0, 60\n100, 80', patMethod: method }));
+    const a = C.boltPattern(s), b = C.boltPattern(s, null, { k: [2, 2, 2, 2, 2], A: [5, 5, 5, 5, 5] });
+    a.bolts.forEach((x, i) => { near(b.bolts[i].FA, x.FA, 1e-9, 'equal weights = unweighted (' + method + '), tension ' + x.i); near(b.bolts[i].FQ, x.FQ, 1e-9, 'equal weights = unweighted (' + method + '), shear ' + x.i); });
+  }
+  const tagged = C.calculate(stateFrom(Object.assign({}, base, { patPts: plainPts.split('\n').map(l => l + ', M10').join('\n') }))).pat;
+  const plain = C.calculate(stateFrom(Object.assign({}, base, { patPts: plainPts }))).pat;
+  ok(!tagged.mixed, 'all bolts tagged with the section-1 size: not mixed');
+  plain.bolts.forEach((x, i) => near(tagged.bolts[i].FA, x.FA, 1e-12, 'tagged same size = untagged, bolt ' + x.i));
+  const r = C.calculate(stateFrom(Object.assign({}, base, { patPts: mixPts }))), P = r.pat;
+  ok(P.mixed && P.weighted && P.groups.length === 2, 'mixed sizes: two size groups, weighted sharing');
+  near(P.bolts.reduce((s, b) => s + b.FA, 0), 12000, 1e-9, 'mixed: Σ F_A = F_z');
+  near(P.bolts.reduce((s, b) => s + b.FA * b.y, 0), P.Mx, 1e-9, 'mixed: Σ F_A·y = M_x');
+  near(P.bolts.reduce((s, b) => s + b.FA * b.x, 0), -P.My, 1e-9, 'mixed: Σ F_A·x = −M_y');
+  near(P.bolts.reduce((s, b) => s + b.qx, 0), 1000, 1e-9, 'mixed: Σ q_x = F_x');
+  near(P.bolts.reduce((s, b) => s + b.qy, 0), 3000, 1e-9, 'mixed: Σ q_y = F_y');
+  near(P.bolts.reduce((s, b) => s + b.x * b.qy - b.y * b.qx, 0), 120000, 1e-9, 'mixed: Σ (x q_y − y q_x) = M_z about C');
+  const m10 = P.groups.find(g => g.size === 'M10'), m6 = P.groups.find(g => g.size === 'M6');
+  ok(m10.k > m6.k && m10.As > m6.As, 'M10 stiffer and larger than M6');
+  ok(P.bolts[3].FA > plain.bolts[3].FA && P.bolts[5].FA < plain.bolts[5].FA, 'stiffer bolts take more, the smaller ones less');
+  near(r.FAmax, m10.FAmax, 1e-12, 'detailed results use the section-1 size group');
+  ok(m6.r && m6.r.valid && m6.r.g.d === 6, 'the other size is checked on its own');
+  near(m6.r.FAmax, m6.FAmax, 1e-9, 'sub-check uses the group maximum tension');
+  const fail = C.calculate(stateFrom(Object.assign({}, base, { patPts: mixPts, patFz: 40, patMx: 1500 })));
+  ok(fail.issues.some(i => i.level === 'error' && /^M6 bolts/.test(i.text)), 'a failing other size is reported');
+  const none = C.calculate(stateFrom(Object.assign({}, base, { patPts: '0, 0, M8\n100, 0, M8\n50, 60, M12' })));
+  ok(none.issues.some(i => /no bolt in the pattern has the size from section 1/.test(i.text)), 'section-1 size not used: warned');
+  const si = C.sizeInput({ thread: 'M10', engage: 15, mode: 'torque', MA: 50, holeFit: 'custom', dhCustom: 11 }, 'M6');
+  ok(si.thread === 'M6' && Math.abs(si.engage - 9) < 1e-9 && si.mode === 'nu' && Math.abs(si.dhCustom - 6.6) < 1e-9 && !si.patOn, 'size input scales engagement and hole, torque → ν');
+}
+
 // ---- flexible flange (beam on elastic bolt supports) ----
 {
   const base = { thread: 'M8', cls: '8.8', plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 20 }], FQ: 0,
