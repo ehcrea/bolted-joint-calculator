@@ -104,6 +104,7 @@
     'ss-dry':      { label: 'Stainless A2/A4, dry (galling risk)',            muG: [0.23, 0.50], muK: [0.15, 0.40], cls: 'D–E', dry: true },
     'ss-paste':    { label: 'Stainless A2/A4 with anti-seize paste',          muG: [0.10, 0.16], muK: [0.08, 0.16], cls: 'A–B' },
     'al-oil':      { label: 'Steel bolt, aluminium parts, lightly oiled',     muG: [0.12, 0.18], muK: [0.10, 0.20], cls: 'B' },
+    'ti-dry':      { label: 'Titanium bolt, dry (galling risk)',              muG: [0.25, 0.50], muK: [0.18, 0.40], cls: 'D–E', est: true, dry: true },
     'ti-paste':    { label: 'Titanium bolt with anti-seize paste',            muG: [0.12, 0.20], muK: [0.10, 0.18], cls: 'B', est: true },
     // Anaerobic thread-lockers applied wet act as a lubricant during tightening; the range depends on the product
     // and the surface. Typical spread of supplier torque-tension data (ISO 16047 tests); check your product.

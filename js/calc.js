@@ -698,7 +698,9 @@
     if (esv && strip.parent && strip.parent.pcb) add('error', 'Do not tap threads into a PCB: use a nut, a standoff or a press-fit / SMD nut.');
     if (layers.some(l => l.m && l.m.polymer) || (esv && strip.parent && strip.parent.polymer)) add('warn', 'Polymer parts creep and relax: the preload will drop over time. Use compression limiters (metal sleeves) in clamped polymer parts, metal inserts for threads, and re-check the torque after some hours.');
     if ((bc.stainless || bc.titanium) && layers.concat(strip.parent ? [{ m: strip.parent }] : []).some(l => l.m && (l.m.group === 'Aluminium' || l.m.group === 'Magnesium'))) add('info', 'Stainless or titanium fasteners in aluminium or magnesium: check galvanic corrosion in wet environments (<a href="https://ehcrea.github.io/galvanic-corrosion-checker/" target="_blank" rel="noopener">Galvanic Corrosion Checker</a>).');
-    if (bc.stainless && inp.friction === 'ss-dry') add('warn', 'Dry stainless threads can gall (cold weld) during tightening. Use an anti-seize paste or a coated bolt.');
+    // ---- galling (cold welding of the threads during tightening) ----
+    const gall = gallingCheck();
+    if (gall) add(gall.level, gall.text);
     if (DA > 0 && DA < dW) add('warn', 'D<sub>A</sub> is smaller than the head bearing diameter; the clamped part is treated as a sleeve.');
     // Clamp length ratio: a short, stiff bolt stretches little, so settling of a few µm costs much of the preload.
     // Common design rule (e.g. semiconductor equipment, vibration-loaded joints): l_K/d >= 3.
@@ -706,6 +708,37 @@
     if (lKd < 1) add('warn', 'Very short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 1): the bolt stretches little, so embedding costs ' + fzShare + ' % of the minimum preload. Use a longer bolt with a spacer sleeve or a stiff washer stack to reach l<sub>K</sub>/d ≥ 3.');
     else if (lKd < 3) add('info', 'Short clamp length (l<sub>K</sub>/d = ' + fmtN(lKd, 2) + ' &lt; 3): embedding costs ' + fzShare + ' % of the minimum preload. A longer bolt with a spacer sleeve (l<sub>K</sub>/d ≥ 3) makes the preload less sensitive to settling and vibration.');
     if (lK / d > 10) add('warn', 'Very long clamp length (l<sub>K</sub>/d > 10): the cone model and the resilience formulas lose accuracy.');
+    // Galling risk. Stainless steel and titanium have a thin oxide layer and harden fast; under thread pressure and
+    // sliding the surfaces cold-weld, the torque jumps and the joint seizes before the preload is reached.
+    // Risk = galling-prone bolt (stainless, titanium) × mating thread of a galling-prone material × lubrication.
+    function gallingCheck() {
+      const boltMat = bc.titanium ? 'titanium' : bc.stainless ? 'stainless' : null;
+      if (!boltMat) return null;
+      let mate = null, mateLabel = '';
+      if (inp.joint === 'nut') { mate = boltMat; mateLabel = boltMat === 'titanium' ? 'a titanium nut' : 'a stainless nut (same property class)'; }
+      else if (inp.joint === 'helicoil') { mate = 'stainless'; mateLabel = 'a Heli-Coil (stainless wire)'; }
+      else if (inp.joint === 'tapped' && strip.parent) {
+        const gp = strip.parent.group;
+        if (gp === 'Stainless') { mate = 'stainless'; mateLabel = 'a tapped hole in ' + strip.parent.label; }
+        else if (gp === 'Titanium') { mate = 'titanium'; mateLabel = 'a tapped hole in ' + strip.parent.label; }
+      }
+      const boltLabel = boltMat === 'titanium' ? 'Titanium bolt' : 'Stainless bolt';
+      const fk = inp.friction;
+      const lubed = ['ss-paste', 'ti-paste', 'mos2'].includes(fk);
+      const locker = fk === 'locker-ss' || fk === 'locker-steel';
+      const steelOnly = ['oxide-oil', 'zn-dry', 'zn-flake', 'al-oil', 'locker-steel'].includes(fk);
+      const dry = !!(fr && fr.dry) || (fr && fr.custom && muGmax >= 0.2);
+      const cure = 'Use an anti-seize paste (e.g. MoS<sub>2</sub>, nickel or PTFE based) on the thread and under the head, or a coated or silver-plated bolt; mix materials of different hardness (e.g. a Nitronic 60 or steel nut / coated Heli-Coil); tighten slowly and steadily (no impact or fast power drivers); do not reuse galled parts.';
+      const pair = mate ? boltLabel.toLowerCase() + ' in ' + mateLabel : '';
+      if (lubed) return null;
+      if (steelOnly) return { level: 'warn', key: 'mismatch', text: 'Galling: the friction option “' + fr.label + '” is for steel bolts, but this is a ' + boltLabel.toLowerCase() + (mate ? ' in ' + mateLabel : '') + '. ' + (boltMat === 'titanium' ? 'Titanium' : 'Stainless steel') + ' galls (cold welds) when not lubricated, and its friction is higher and wider than these values. Choose a ' + boltMat + ' friction option. ' + cure };
+      if (dry && mate) return { level: 'warn', key: 'dry-pair', text: 'High galling risk: ' + pair + ', threads not lubricated' + (fr && fr.custom ? ' (μ<sub>G,max</sub> = ' + fmtN(muGmax, 2) + ')' : '') + '. Like materials of this kind cold-weld under thread pressure: the torque jumps, the threads seize before the preload is reached, and the bolt may twist off. ' + cure };
+      if (dry) return { level: 'warn', key: 'dry', text: 'Galling: ' + boltLabel.toLowerCase() + ' with dry threads' + (fr && fr.custom ? ' (μ<sub>G,max</sub> = ' + fmtN(muGmax, 2) + ')' : '') + ' can gall (cold weld) during tightening. ' + cure };
+      if (locker && mate) return { level: 'info', key: 'locker', text: 'Galling: ' + pair + ' with a wet thread-locker. The locker lubricates only partly; with like materials, fine threads or fast tightening the threads can still gall. Tighten slowly, or use an anti-seize on the bearing face and a locking element instead.' };
+      if (fr && fr.custom && mate) return { level: 'info', key: 'custom', text: 'Galling: ' + pair + '. Make sure the custom friction values belong to a lubricated thread (anti-seize paste or coating); dry, like materials of this kind gall.' };
+      return null;
+    }
+
     // ---- NASA-STD-5020 style check (optional) ----
     const nasa = inp.nasa ? nasaCheck() : null;
     function nasaCheck() {
@@ -792,7 +825,7 @@
       thread: th, g, bc, sz, head, dW, dh, dhb, DKm, nut, washer, wg, nutWasher, layers, plates, lK, lKd, EP, alphaP, DA,
       esv, joint: inp.joint,
       res: { lSK, ls, lGew, lG, lM, EM, dSK, dShank, dGew, dG, dM, dC, springAlways, deltaS0, deltaS, deltaP, pr },
-      lock, lockKey, lockerUsed, nasa, pat, pry, ecc, FKA, bendFactor,
+      lock, lockKey, lockerUsed, nasa, pat, pry, ecc, FKA, bendFactor, gall,
       n, PhiK, Phi,
       emb: { fZum, nThread, nBear, nInter, nLockExtra, values: ev, shear }, fZ, FZ, FZ0, springStage, dT, dFth, thLoss, thGain,
       FAmax, FAmin, FQ, muT, qF, SGreq, FKQ, FKextra, FKerf, FPA, FSA, FMerf,

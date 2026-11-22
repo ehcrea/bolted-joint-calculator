@@ -238,6 +238,25 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   near(pp.FAmax, 2000 * (1 + pp.pry.ratio), 1e-12, 'prying on the pattern bolt load');
 }
 
+// ---- galling ----
+{
+  const g = o => C.calculate(stateFrom(Object.assign({ thread: 'M8', FAmax: 2, FQ: 0, plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 10 }] }, o))).gall;
+  const key = o => { const r = g(o); return r ? r.level + ':' + r.key : null; };
+  ok(key({ cls: 'A2-70', joint: 'nut', friction: 'ss-dry' }) === 'warn:dry-pair', 'galling: dry stainless bolt and nut');
+  ok(key({ cls: 'A2-70', joint: 'helicoil', friction: 'ss-dry', tapMat: '5083' }) === 'warn:dry-pair', 'galling: dry stainless bolt in a Heli-Coil');
+  ok(key({ cls: 'A2-70', joint: 'tapped', friction: 'ss-dry', tapMat: '1.4301' }) === 'warn:dry-pair', 'galling: dry stainless bolt tapped into stainless');
+  ok(key({ cls: 'A2-70', joint: 'tapped', friction: 'ss-dry', tapMat: 'S235' }) === 'warn:dry', 'galling: dry stainless bolt into steel (milder message)');
+  ok(key({ cls: 'A2-70', joint: 'helicoil', friction: 'zn-dry' }) === 'warn:mismatch', 'galling: stainless bolt with a steel friction option');
+  ok(key({ cls: 'A2-70', joint: 'nut', friction: 'custom', muGmin: 0.25, muGmax: 0.40, muKmin: 0.2, muKmax: 0.3 }) === 'warn:dry-pair', 'galling: custom friction in the dry range');
+  ok(key({ cls: 'A2-70', joint: 'nut', friction: 'custom', muGmin: 0.10, muGmax: 0.14, muKmin: 0.1, muKmax: 0.14 }) === 'info:custom', 'galling: custom lubricated friction, note only');
+  ok(key({ cls: 'A2-70', joint: 'helicoil', friction: 'locker-ss' }) === 'info:locker', 'galling: thread-locker on stainless, note');
+  ok(key({ cls: 'A2-70', joint: 'helicoil', friction: 'ss-paste' }) === null, 'galling: stainless with anti-seize, no message');
+  ok(key({ cls: 'Ti5', joint: 'nut', friction: 'ti-dry' }) === 'warn:dry-pair', 'galling: dry titanium bolt and nut');
+  ok(key({ cls: 'Ti5', joint: 'nut', friction: 'ti-paste' }) === null, 'galling: titanium with paste, no message');
+  ok(key({ cls: '8.8', joint: 'nut', friction: 'zn-dry' }) === null, 'galling: steel bolt, no message');
+  ok(D.FRICTION['ti-dry'] && D.FRICTION['ti-dry'].dry, 'dry titanium friction option exists');
+}
+
 // ---- custom bolt positions ----
 {
   const pp = C.parsePoints('0, 0\n60\t0\n# comment\n120 0\nabc\n0,50; 0,100');

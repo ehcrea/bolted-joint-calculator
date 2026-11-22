@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=29">
+  <link rel="stylesheet" href="css/style.css?v=30">
   <script>
     try { const t = (localStorage.getItem('ehcrea.theme') || localStorage.getItem('bolt.theme')); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -446,6 +446,15 @@
       <dt>Thread stripping</dt><dd>The thread flanks shear off. Good design makes the bolt break first: a longer engagement or an insert in soft materials.</dd>
     </dl>
     <p>The <b>Calculation steps</b> section shows every formula with your numbers so you can follow or check the result by hand.</p>
+    <h3 id="help-galling">Galling</h3>
+    <p>Stainless steel and titanium are protected by a thin oxide layer and harden quickly. Under thread pressure and sliding, the oxide is wiped off and the surfaces cold-weld: the torque jumps, the joint seizes before the preload is reached, and the bolt can twist off or the thread tear out. This is <b>galling</b> (thread seizure).</p>
+    <ul>
+      <li><b>Highest risk</b>: a stainless or titanium bolt in a mating thread of a like material (a stainless nut, a Heli-Coil, which is stainless wire, or a tapped hole in stainless or titanium), with dry threads. The tool warns for this pair, for a stainless or titanium bolt with dry threads in general, and when a friction option for steel bolts is chosen for a stainless or titanium bolt (those values are wrong for it too).</li>
+      <li><b>Notes only</b>: a wet thread-locker (it lubricates only partly) and custom friction values with a like-material pair. With an anti-seize paste (stainless or titanium option, or MoS<sub>2</sub>) there is no message.</li>
+      <li><b>Prevention</b>: anti-seize paste on the thread and under the head; coated or silver-plated bolts; materials of different hardness (e.g. a Nitronic 60 or coated steel nut, dry-film-coated Heli-Coils); coarse threads rather than fine; slow, steady tightening (no impact or fast power drivers, which heat the thread); clean threads; do not reuse galled parts.</li>
+    </ul>
+    <p class="about-meta">Galling is not a calculated limit: it depends on surface finish, speed, cleanliness and coating, so the tool gives warnings and notes rather than a pass/fail check. The dry titanium friction range is an estimate.</p>
+
     <h3 id="help-pattern">Bolt patterns</h3>
     <p>Tick <b>Loads act on a bolt pattern</b> in section 6 and enter the forces and moments on the whole flange. The axial load F<sub>z</sub> can act off-centre at (x<sub>F</sub>, y<sub>F</sub>). The bolts form a circle, a rectangular grid, or <b>custom positions</b>: paste x, y in mm, one bolt per line, from any origin (a drawing datum, or two columns from a spreadsheet). For custom patterns the coordinates and x<sub>F</sub>, y<sub>F</sub> use your origin; the tool moves everything to the bolt-group centroid C, which is shown in the plan view. <i>Start from</i> copies the current circle or grid into the list so you can edit single bolts. By default the tool treats the flange as rigid (the classical bolt-group model):</p>
     <ul>
@@ -527,10 +536,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=29"></script>
-  <script src="js/calc.js?v=29"></script>
-  <script src="js/presets.js?v=29"></script>
-  <script src="js/drawing.js?v=29"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="js/data.js?v=30"></script>
+  <script src="js/calc.js?v=30"></script>
+  <script src="js/presets.js?v=30"></script>
+  <script src="js/drawing.js?v=30"></script>
+  <script src="js/app.js?v=30"></script>
 </body>
 </html>
