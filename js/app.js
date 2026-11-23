@@ -378,7 +378,7 @@
       rows.push(['AISC available tension per bolt', f(Q.Tav / 1000, 2) + ' kN', 'γ·T = ' + f(U.Fed / 1000, 2) + ' kN (' + f(Q.util * 100, 0) + ' %) · φr<sub>n</sub> = ' + f(Q.B / 1000, 2) + ' kN']);
       rows.push(['AISC flange thickness', 't = ' + f(p.t, 1) + ' mm', 't<sub>req</sub> = ' + f(Q.treq, 1) + ' mm · no prying above t<sub>c</sub> = ' + f(Q.tc, 1) + ' mm · q = ' + f(Q.q / 1000, 2) + ' kN']);
     }
-    $('#pry-ult').innerHTML = rows.length ? '<div class="section-title">Plastic T-stub check (ultimate, per bolt)</div>' + metrics(rows) : '';
+    $('#pry-ult').innerHTML = rows.length ? '<div class="section-title" style="margin-top:12px">Plastic T-stub check (ultimate, per bolt)</div><div class="metrics">' + metrics(rows) + '</div>' : '';
   }
   function renderEcc(r) {
     const card = $('#ecc-card'), e = r.ecc;
