@@ -555,6 +555,37 @@
     return out.join('');
   }
 
+  // ---------------- opened eccentric joint: bolt force against the axial load ----------------
+  function eccCurve(r) {
+    const e = r.ecc, eo = e && e.open;
+    if (!eo || !eo.curve) return '';
+    const VW = 460, VH = 268, x0 = 52, x1 = 440, y0 = 210, y1 = 20;
+    const FV = r.FVmin, top = eo.top;
+    const fsMax = Math.max(...eo.curve.map(p => p.FS), FV + e.PhiEn * top) * 1.05;
+    const X = F => x0 + F / top * (x1 - x0), Y = F => y0 - F / fsMax * (y0 - y1);
+    const out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Bolt force against axial load, opened joint">`];
+    out.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" class="pat-axis" style="stroke-dasharray:none"/><line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" class="pat-axis" style="stroke-dasharray:none"/>`);
+    // lever law (rigid tipping about the far edge) and the linear VDI line
+    const FL = Math.min(top, fsMax / eo.lever);
+    out.push(`<line x1="${X(0)}" y1="${Y(0)}" x2="${r1(X(FL))}" y2="${r1(Y(eo.lever * FL))}" stroke="currentColor" stroke-opacity=".55" stroke-dasharray="1.5 3.5" stroke-width="1.6"/>`);
+    out.push(`<line x1="${X(0)}" y1="${r1(Y(FV))}" x2="${X(top)}" y2="${r1(Y(FV + e.PhiEn * top))}" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="6 4"/>`);
+    out.push(`<polyline points="${eo.curve.map(p => r1(X(p.FA)) + ',' + r1(Y(p.FS))).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`);
+    // opening limit and F_A,max
+    const xa = X(eo.FabMin);
+    out.push(`<line x1="${r1(xa)}" y1="${y0}" x2="${r1(xa)}" y2="${y1}" class="pat-axis"/><text x="${r1(xa - 4)}" y="${y1 + 10}" text-anchor="end" class="lbl">opens at ${f(eo.FabMin / 1000, 1)} kN</text>`);
+    const xm = X(r.FAmax), ym = Y(eo.atMin.FS), lab = `${f(eo.atMin.FS / 1000, 1)} kN at F<tspan baseline-shift="sub" font-size="9">A,max</tspan>`;
+    out.push(`<circle cx="${r1(xm)}" cy="${r1(ym)}" r="4.5" class="pat-bolt crit"/>`);
+    const lx = Math.min(x1, Math.max(xm, xa + 100));
+    out.push(`<text x="${r1(lx)}" y="${y1 + 10}" text-anchor="end" class="lbl">${lab}</text>`);
+    if (ym > y1 + 24) out.push(`<line x1="${r1(xm)}" y1="${y1 + 15}" x2="${r1(xm)}" y2="${r1(ym - 6)}" stroke="currentColor" stroke-opacity=".4"/>`);
+    out.push(`<text x="${x1}" y="${y0 + 16}" text-anchor="end" class="lbl">axial load F<tspan baseline-shift="sub" font-size="9">A</tspan> up to ${f(top / 1000, 1)} kN</text>`);
+    out.push(`<text x="${x0 - 6}" y="${y1 + 4}" text-anchor="end" class="lbl">${f(fsMax / 1000, 0)}</text><text x="${x0 - 6}" y="${y0}" text-anchor="end" class="lbl">0</text>`);
+    out.push(`<text x="${x0}" y="${VH - 20}" class="lbl">bolt force F<tspan baseline-shift="sub" font-size="9">S</tspan> (kN) at F<tspan baseline-shift="sub" font-size="9">V,min</tspan></text>`);
+    out.push(`<text x="${x0}" y="${VH - 4}" class="lbl">solid = opened joint · dashed = closed (linear) · dotted = lever law</text>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
   // ---------------- flexible flange: deflection line and bolt column loads (flexible vs rigid) ----------------
   function flexView(r) {
     const P = r.pat, FX = P && P.flex;
@@ -596,5 +627,5 @@
 
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView, flexView };
+  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView, eccCurve, flexView };
 })(window);

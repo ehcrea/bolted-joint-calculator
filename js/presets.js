@@ -16,7 +16,7 @@
     patNx: 2, patNy: 2, patSx: 80, patSy: 60, patPerimeter: true, patLx: 110, patLy: 90,
     patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0, patXF: 0, patYF: 0, patFlex: false, patFt: '', patPts: '', patStacks: '', patEdge: 15, partT: '',
     pryOn: false, pryA: 30, pryB: 25, pryW: 60, pryT: '',
-    eccOn: false, eccC: 50, eccB: 40, eccS: 0, eccA: 0, eccU: '', eccMB: 0, eccI: '',
+    eccOn: false, eccC: 50, eccB: 40, eccS: 0, eccA: 0, eccU: '', eccMB: 0, eccI: '', eccOpen: false,
   };
 
   const PRESETS = [
@@ -137,6 +137,10 @@
       joint: 'nut', thread: 'M10', cls: '10.9', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
       plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 15 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
       nu: 0.9, FAmax: 4, FAmin: 0, FQ: 0, n: 0.5, eccOn: true, eccC: 60, eccB: 40, eccS: 5, eccA: 12 } },
+    { id: 'ecc-open', label: 'M10 10.9 eccentric bracket, rare 30 kN overload opens the joint (opening allowed)', s: {
+      joint: 'nut', thread: 'M10', cls: '10.9', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 15 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FAmax: 30, FAmin: 30, FQ: 0, n: 0.5, eccOn: true, eccC: 60, eccB: 40, eccS: 5, eccA: 12, eccOpen: true } },
     { id: 'pry-angle', label: 'M10 8.8 hanger: 10 mm angle leg in tension with prying', s: {
       joint: 'nut', thread: 'M10', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '200HV', washerNut: true,
       plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 15 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',

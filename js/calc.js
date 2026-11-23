@@ -693,10 +693,10 @@
       ecc.FKA = FKA; ecc.den = den;
       if (!(den > 0)) add('error', 'Eccentric case: I<sub>BT</sub>/A<sub>D</sub> + s<sub>sym</sub>·u must be positive; the bolt is too far from the opening edge for this model.');
     }
-    const FKerf = Math.max(FKQ, FKextra, isFinite(FKA) ? FKA : 0);
+    const FKerf = Math.max(FKQ, FKextra, isFinite(FKA) && !(ecc && inp.eccOpen) ? FKA : 0);
     const FPA = (1 - Phi) * FAmax;
     const FSA = Phi * FAmax;
-    const FMerf = FKerf + FPA + FZ + thLoss;
+    let FMerf = FKerf + FPA + FZ + thLoss;
 
     // ---- assembly stress (utilisation during tightening) ----
     const Wp = PI / 16 * Math.pow(g.ds, 3);
@@ -709,16 +709,17 @@
     const sigRedM = nuActual * bc.Rp;
 
     // ---- R6 / R8: working stress ----
-    const FSmax = FMmax + FSA + thGain;
-    const sigZ = FSmax / g.As;
+    let FSmax = FMmax + FSA + thGain;
+    let sigZ = FSmax / g.As;
     const ktau = 0.5;
-    const sigRedB = Math.sqrt(sigZ * sigZ + 3 * Math.pow(ktau * tauM, 2));
-    const SF = bc.Rp / sigRedB;
+    let sigRedB = Math.sqrt(sigZ * sigZ + 3 * Math.pow(ktau * tauM, 2));
+    let SF = bc.Rp / sigRedB;
 
     // ---- residual clamp load, opening, slipping ----
     const FVmin = FMmin - FZ - thLoss;
-    const FKRmin = FVmin - FPA;
-    const SG = FQ > 0 ? FKRmin * qF * muT / FQ : Infinity;
+    let FKRmin = FVmin - FPA;
+    const FKRlin = FKRmin;
+    let SG = FQ > 0 ? FKRmin * qF * muT / FQ : Infinity;
 
     // ---- R9: fatigue (alternating stress) ----
     // eccentric loading: tension plus bending in the bolt, σ_SAb = [1 + (a/Φ_en* − s_sym)·(l_K/l_ers)·(E_S/E_P)·π·d_S³/(8·Ī_Bers)]·Φ_en*·F_A/A_S
@@ -729,10 +730,82 @@
       ecc.sigSAbo = bendFactor * Phi * FAmax / g.As; ecc.sigSAbu = bendFactor * Phi * FAmin / g.As;
       ecc.sigSAo = Phi * FAmax / g.As;
     }
-    const sigA = Math.abs(bendFactor * Phi * (FAmax - FAmin) / (2 * g.As));
+    let sigA = Math.abs(bendFactor * Phi * (FAmax - FAmin) / (2 * g.As));
     const sigASV = 0.85 * (150 / d + 45);
     const F02 = g.As * bc.Rp;
-    const FSm = FMmax + Phi * (FAmax + FAmin) / 2;
+    let FSm = FMmax + Phi * (FAmax + FAmin) / 2;
+
+    // ---- opened eccentric joint (beyond the opening limit F_Aab) ----
+    // Up to F_Aab the VDI 2230 linear relations hold. Beyond it the interface opens at U and only a shrinking
+    // contact zone towards the tipping edge V carries the clamp load, so the bolt force rises faster and tends to
+    // the lever law F_S = F_A·ξ_A/ξ_B about V. The opened branch uses an elastic no-tension interface (rigid flange
+    // on an elastic layer over c_T × b_T with the axial resilience δ_P, linear pressure, no tension), joined to the
+    // VDI branch at F_Aab: F_S = F_V + Φ_en*·F_Aab + [F_S,int(F_A) − F_S,int(F_Aab)]. A bending moment M_B moves the
+    // load line to a + M_B/F_A,max (load and moment grow together).
+    if (ecc && isFinite(FKA) && ecc.den > 0 && FAmax > 0) {
+      const cT = ecc.cT, xi0 = cT - ecc.u, xiB = xi0 + ecc.ssym;
+      const aEff = ecc.a + ecc.MB / FAmax, xiA = xi0 + aEff;
+      const dn = (1 - Phi) + ecc.u * (aEff - ecc.ssym) / ecc.den;
+      const FabOf = FV => (dn > 0 ? FV / dn : Infinity);
+      if (xiB > 0 && xiB < cT) {
+        const kb = 1 / (deltaP * cT);                 // k·b, k = 1/(δ_P·A_D) per area, b = A_D/c_T
+        // contact state for a compressive resultant N with moment Mv about V: w(ξ) = w0 − θ·ξ, ξ from V
+        const state = (N, Mv) => {
+          const e = Mv / N;
+          if (e >= cT / 3 && e <= 2 * cT / 3) {
+            const A1 = N / kb, A2 = Mv / kb;
+            const th = (A1 * cT / 2 - A2) * 12 / Math.pow(cT, 3);
+            return { w0: (A1 + th * cT * cT / 2) / cT, th, x: cT };
+          }
+          if (e < cT / 3) { const x = 3 * e, th = 2 * N / (kb * x * x); return { w0: th * x, th, x }; }
+          const x = 3 * (cT - e), th = -2 * N / (kb * x * x);
+          return { w0: th * (cT - x), th, x };
+        };
+        const solveW = (FV, FA) => {
+          const s0 = state(FV, FV * xiB), C0 = FV * deltaS + s0.w0 - s0.th * xiB;
+          const R = FS => { const s = state(FS - FA, FS * xiB - FA * xiA); return { r: FS * deltaS + s.w0 - s.th * xiB - C0, s }; };
+          let lo = Math.max(FA, FA * xiA / xiB, xiA < cT ? FA * (cT - xiA) / (cT - xiB) : FA) * (1 + 1e-12) + 1e-9, hi = lo + FV + FA + 1;
+          while (R(hi).r < 0 && hi < 1e12) hi *= 2;
+          for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (R(m).r < 0) lo = m; else hi = m; }
+          const FS = (lo + hi) / 2, s = R(FS).s;
+          return { FS, th: s.th, x: s.x, gapU: Math.max(0, -(s.w0 - s.th * cT)), s0 };
+        };
+        // bolt bending: rotation of the head against the nut = bending of the parts β_P·M_P (VDI, M_P = F_A·a − ΔF_S·s_sym)
+        // plus, once open, the tilt of the flange about the contact zone
+        const kBend = ES * g.ds / (2 * ecc.lers);
+        const MP = (FA, dFS) => FA * aEff - dFS * ecc.ssym;
+        const curve = (FV, FA) => {
+          const Fab = FabOf(FV);
+          if (!(FA > Fab)) return { FS: FV + Phi * FA, sig: bendFactor * Phi * FA / g.As, open: false, Fab };
+          const W = solveW(FV, FA), Wab = solveW(FV, Fab);
+          const FS = FV + Phi * Fab + (W.FS - Wab.FS);
+          const sigB = (bendFactor - 1) * Phi * Fab / g.As + kBend * (ecc.betaP * (MP(FA, FS - FV) - MP(Fab, Phi * Fab)) + (W.th - Wab.th));
+          return { FS, sig: (FS - FV) / g.As + sigB, open: true, Fab, x: W.x, gapU: W.gapU - Wab.gapU };
+        };
+        const oMin = curve(FVmin, FAmax), oMax = curve(FMmax, FAmax);
+        const eo = ecc.open = { xiA, xiB, aEff, lever: xiA / xiB, FabMin: FabOf(FVmin), FabMax: FabOf(FMmax), atMin: oMin, atMax: oMax,
+          allowed: !!inp.eccOpen, sigAlin: sigA, FSmaxLin: FSmax };
+        if (oMax.open) {
+          FSmax = oMax.FS + thGain;
+          sigZ = FSmax / g.As;
+          sigRedB = Math.sqrt(sigZ * sigZ + 3 * Math.pow(ktau * tauM, 2));
+          SF = bc.Rp / sigRedB;
+        }
+        if (oMin.open) {
+          // contact force left at the tipping side (the joint does not lift off as a whole while ξ_A > ξ_B)
+          FKRmin = oMin.FS - FAmax;
+          FMerf = FKerf + FMmin - FKRmin;
+          SG = FQ > 0 ? FKRmin * qF * muT / FQ : Infinity;
+          const lo = curve(FVmin, FAmin);
+          sigA = Math.abs(oMin.sig - lo.sig) / 2;
+          FSm = FMmax + (curve(FMmax, FAmax).FS + curve(FMmax, FAmin).FS) / 2 - FMmax;
+          // sample the bolt force curve at F_V,min for the chart
+          const top = Math.max(FAmax, eo.FabMin) * 1.25, pts = [];
+          for (let i = 0; i <= 40; i++) { const FA = top * i / 40; pts.push({ FA, FS: curve(FVmin, FA).FS }); }
+          eo.curve = pts; eo.top = top;
+        }
+      } else ecc.open = { outside: true, FabMin: FabOf(FVmin) };
+    }
     const sigASG = Math.max(sigASV, (2 - FSm / F02) * sigASV);
     const sigAS = inp.rolledAfter ? sigASG : sigASV;
     const SD = sigA > 0 ? sigAS / sigA : Infinity;
@@ -847,7 +920,7 @@
     };
     ck('R5', 'Assembly utilisation ν (equivalent stress / R<sub>p0.2</sub>)', nuActual * 100, '≤ 100 %', nuActual <= 0.905 || (inp.mode !== 'torque' && nuActual <= 1.0001), nuActual <= 1.0, '%');
     ck('R2', 'Minimum assembly preload F<sub>M,min</sub> ≥ F<sub>M,erf</sub>', FMmin / 1000, '≥ ' + fmtN(FMerf / 1000, 2) + ' kN', FMmin >= FMerf, false, 'kN', FMmin / FMerf);
-    ck('R10', 'Residual clamp load F<sub>KR,min</sub> (joint must not open)', FKRmin / 1000, '> 0', FKRmin > 0, false, 'kN');
+    ck('R10', 'Residual clamp load F<sub>KR,min</sub> ' + (ecc && ecc.open && ecc.open.atMin && ecc.open.atMin.open ? '(contact force at the tipping side, opened joint)' : '(joint must not open)'), FKRmin / 1000, '> 0', FKRmin > 0, false, 'kN');
     if (FQ > 0) ck('R12', 'Safety against slipping S<sub>G</sub>', SG, '≥ ' + fmtN(SGreq, 2), SG >= SGreq, SG >= 1.0, '', SG);
     ck('R8', 'Working stress safety S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub>', SF, '≥ 1.0', SF >= 1.0, false, '', SF);
     if (sigA > 0) ck('R9', 'Fatigue safety S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub>', SD, '≥ ' + SDreq, SD >= SDreq, SD >= 1.0, '', SD);
@@ -856,7 +929,7 @@
       const fx = pat.flex;
       ck('Pattern', 'Flange bending (flexible flange): σ = M<sub>max</sub> / W', fx.sig, '≤ ' + (fx.brittle ? 'R<sub>m</sub> ' : 'R<sub>p</sub> ') + fmtN(fx.fAllow, 0) + ' MPa', fx.sig <= fx.fAllow, false, 'MPa', fx.sig > 0 ? fx.fAllow / fx.sig : undefined);
     }
-    if (ecc && isFinite(FKA)) ck('R10', 'No one-sided opening: F<sub>KR,min</sub> ≥ F<sub>KA</sub> (eccentric)', FKRmin / 1000, '≥ ' + fmtN(FKA / 1000, 2) + ' kN', FKRmin >= FKA, false, 'kN', FKA > 0 ? FKRmin / FKA : undefined);
+    if (ecc && isFinite(FKA)) ck('R10', 'No one-sided opening: F<sub>KR,min</sub> ≥ F<sub>KA</sub> (eccentric)' + (inp.eccOpen ? ', opening allowed' : ''), FKRlin / 1000, '≥ ' + fmtN(FKA / 1000, 2) + ' kN', FKRlin >= FKA, !!inp.eccOpen, 'kN', FKA > 0 ? FKRlin / FKA : undefined);
     if (pry) {
       const lim = (pry.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + fmtN(pry.fAllow, 0) + ' MPa';
       ck('Pry', 'Flange bending at the web face (prying)', pry.sigWeb, '≤ ' + lim, pry.sigWeb <= pry.fAllow, false, 'MPa', pry.fAllow / pry.sigWeb);
@@ -868,6 +941,13 @@
     if (nuActual > 1.0) add('error', 'The bolt yields during tightening (utilisation ' + fmtN(nuActual * 100, 0) + ' %). Lower the torque or use a stronger property class.');
     else if (inp.mode === 'torque' && nuActual > 0.905) add('warn', 'The bolt is tightened above 90 % of its yield point. Fine for yield- or angle-controlled tightening only.');
     if (FMmin < FMerf) add('error', 'The minimum preload ' + fmtN(FMmin / 1000, 2) + ' kN is below the required ' + fmtN(FMerf / 1000, 2) + ' kN. Use a bigger or stronger bolt, a more accurate tightening method (lower α<sub>A</sub>), more bolts or a lower load.');
+    if (ecc && ecc.open && ecc.open.outside) add('warn', 'Eccentric case: the bolt (s<sub>sym</sub>) lies outside the interface c<sub>T</sub>, so the bolt force after opening cannot be estimated. Check the geometry.');
+    if (ecc && ecc.open && ecc.open.atMin && ecc.open.atMin.open) {
+      const eo = ecc.open;
+      add(inp.eccOpen ? 'warn' : 'error', 'Eccentric joint opens on one side at F<sub>A</sub> = ' + fmtN(eo.FabMin / 1000, 2) + ' kN (F<sub>A,max</sub> = ' + fmtN(FAmax / 1000, 2) + ' kN, at F<sub>V,min</sub>). After opening the bolt force rises faster: ' +
+        fmtN(eo.atMin.FS / 1000, 2) + ' kN instead of ' + fmtN((FVmin + Phi * FAmax) / 1000, 2) + ' kN (lever law about the far edge: ' + fmtN(eo.lever * FAmax / 1000, 2) + ' kN), and the bolt bends more, so the stress amplitude grows from ' +
+        fmtN(eo.sigAlin, 1) + ' to ' + fmtN(sigA, 1) + ' MPa. ' + (inp.eccOpen ? 'Opening is allowed here; the checks use the opened-joint bolt forces. Avoid opening under alternating loads: the gap also lets fretting and corrosion in.' : 'Raise the preload, move the bolt towards the load or widen the interface; or tick “opening allowed” if this is a rare overload (the checks use the opened-joint bolt forces either way).'));
+    }
     if (FKRmin <= 0) add('error', 'The joint opens under the axial load: the residual clamp load is gone. Increase the preload or reduce the load per bolt.');
     if (FQ > 0 && SG < SGreq) add(SG >= 1 ? 'warn' : 'error', 'The transverse load can make the parts slip (S<sub>G</sub> = ' + fmtN(SG, 2) + '). Raise the preload, the interface friction or the number of bolts; or use dowel pins.');
     if (SF < 1) add('error', 'The bolt yields in service (S<sub>F</sub> = ' + fmtN(SF, 2) + '). Reduce the preload or the axial load, or use a stronger bolt.');
@@ -1019,7 +1099,7 @@
       Kmin, Kmax, FMzulNu, FMmax, FMmin, FMatMuMax, MA, torqueParts,
       Wp, MG, sigM, tauM, sigRedM, nuActual,
       FSmax, sigZ, ktau, sigRedB, SF,
-      FVmin, FKRmin, SG,
+      FVmin, FKRmin, FKRlin, SG,
       sigA, sigASV, sigASG, sigAS, SD, SDreq, FSm, F02,
       pressures, Fpress, strip, Le, lenInfo,
     };

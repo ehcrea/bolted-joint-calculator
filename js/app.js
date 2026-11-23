@@ -373,18 +373,24 @@
     card.hidden = !e;
     if (!e) return;
     $('#ecc-view').innerHTML = DR.eccView(r);
-    const open = isFinite(e.FKA) && r.FKRmin < e.FKA;
+    const open = isFinite(e.FKA) && r.FKRlin < e.FKA, eo = e.open, opened = eo && eo.atMin && eo.atMin.open;
     const badge = $('#ecc-badge');
-    badge.textContent = open ? 'opens on one side' : 'stays closed';
-    badge.className = 'badge' + (open ? ' bad' : '');
+    badge.textContent = open ? 'opens on one side' + (state.eccOpen ? ' (allowed)' : '') : 'stays closed';
+    badge.className = 'badge' + (open && !state.eccOpen ? ' bad' : '');
     $('#ecc-metrics').innerHTML = metrics([
       ['Load factor Φ<sub>en</sub>*', f(e.PhiEn, 4), 'concentric Φ<sub>n</sub> = ' + f(e.PhiCon, 4)],
       ['Resilience δ<sub>P</sub>* / δ<sub>P</sub>', f(e.dPstar / e.dP, 3), 'eccentric clamping'],
       ['Bending inertia Ī<sub>Bers</sub>', f(e.IBers, 0) + ' mm⁴', e.IBauto ? (e.IBers < e.Iers ? 'limited to I<sub>BT</sub>' : 'auto estimate') : 'entered'],
-      ['Clamp load against opening F<sub>KA</sub>', isFinite(e.FKA) ? f(e.FKA / 1000, 2) + ' kN' : '∞', 'F<sub>KR,min</sub> = ' + f(r.FKRmin / 1000, 2) + ' kN'],
+      ['Clamp load against opening F<sub>KA</sub>', isFinite(e.FKA) ? f(e.FKA / 1000, 2) + ' kN' : '∞', 'F<sub>KR,min</sub> = ' + f(r.FKRlin / 1000, 2) + ' kN (closed-joint value)'],
       ['Bending factor on σ<sub>a</sub>', e.bendFactor !== undefined ? f(e.bendFactor, 2) : '–', 'σ<sub>SAb</sub> / σ<sub>SA</sub>'],
       ['Interface A<sub>D</sub>, I<sub>BT</sub>', f(e.AD, 0) + ' mm², ' + sci(e.IBT) + ' mm⁴', ''],
-    ]);
+    ].concat(eo && isFinite(eo.FabMin) && !eo.outside ? [
+      ['Opening limit F<sub>Aab</sub>', f(eo.FabMin / 1000, 2) + ' kN', 'at F<sub>V,min</sub>; ' + f(eo.FabMax / 1000, 2) + ' kN at F<sub>M,max</sub>'],
+    ] : []).concat(opened ? [
+      ['Bolt force at F<sub>A,max</sub> (opened)', f(eo.atMin.FS / 1000, 2) + ' kN', 'linear: ' + f((r.FVmin + e.PhiEn * r.FAmax) / 1000, 2) + ' kN · lever law: ' + f(eo.lever * r.FAmax / 1000, 2) + ' kN'],
+      ['Contact length / gap at U', f(eo.atMin.x, 1) + ' of ' + f(e.cT, 0) + ' mm', 'gap ≈ ' + f(eo.atMin.gapU * 1000, 1) + ' µm'],
+    ].concat(r.FAmax > r.FAmin ? [['Stress amplitude σ<sub>a</sub>', f(r.sigA, 1) + ' MPa', 'closed-joint formula: ' + f(eo.sigAlin, 1) + ' MPa']] : []) : []));
+    $('#ecc-curve').innerHTML = opened ? DR.eccCurve(r) : '';
   }
   function renderPattern(r) {
     const card = $('#pat-card'), P = r.pat;
@@ -473,6 +479,7 @@
   function steps(r) {
     const g = r.g, kN = x => f(x / 1000, 2) + ' kN', N = (x, d) => f(x, d);
     const S = [];
+    const OPX = r.ecc && r.ecc.open && r.ecc.open.atMin ? r.ecc.open : null;
     const step = (id, title, rows, note) => S.push(`<section class="calc-step"><h3><span class="sid">${id}</span>${title}</h3><table class="ftable">${rows.map(([a, b, c]) => `<tr><td class="fl">${a}</td><td class="fs">${b || ''}</td><td class="fr">${c || ''}</td></tr>`).join('')}</table>${note ? `<p class="hint">${note}</p>` : ''}</section>`);
 
     const PT = r.pat;
@@ -587,7 +594,8 @@
       ['Check F<sub>M,min</sub> ≥ F<sub>M,erf</sub>', kN(r.FMmin) + ' vs ' + kN(r.FMerf), r.FMmin >= r.FMerf ? '<span class="status ok">✓</span>' : '<span class="status error">✕</span>'],
     ]);
     step('R8', 'Working stress', [
-      ['F<sub>S,max</sub> = F<sub>M,max</sub> + Φ<sub>n</sub>·F<sub>A</sub> + ΔF<sub>Vth,gain</sub>', kN(r.FMmax) + ' + ' + N(r.Phi, 4) + '·' + kN(r.FAmax) + ' + ' + kN(r.thGain), kN(r.FSmax)],
+      OPX && OPX.atMax.open ? ['F<sub>S,max</sub> = F<sub>S</sub>(F<sub>A,max</sub>) of the opened joint at F<sub>M,max</sub> + ΔF<sub>Vth,gain</sub>', 'opens at ' + kN(OPX.FabMax) + '; linear would give ' + kN(OPX.FSmaxLin), kN(r.FSmax)]
+        : ['F<sub>S,max</sub> = F<sub>M,max</sub> + Φ<sub>n</sub>·F<sub>A</sub> + ΔF<sub>Vth,gain</sub>', kN(r.FMmax) + ' + ' + N(r.Phi, 4) + '·' + kN(r.FAmax) + ' + ' + kN(r.thGain), kN(r.FSmax)],
       ['σ<sub>z,max</sub> = F<sub>S,max</sub> / A<sub>S</sub>', '', N(r.sigZ, 0) + ' MPa'],
       ['M<sub>G</sub> = F<sub>M</sub>·d<sub>2</sub>/2·(P/(π d<sub>2</sub>) + 1.155 μ<sub>G,min</sub>)', '', N(r.MG / 1000, 2) + ' N·m'],
       ['τ = M<sub>G</sub> / W<sub>p</sub>, W<sub>p</sub> = π d<sub>S</sub>³/16', N(r.MG, 0) + ' / ' + N(r.Wp, 1), N(r.tauM, 0) + ' MPa'],
@@ -596,7 +604,7 @@
       ['S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub> ≥ 1.0', N(r.bc.Rp, 0) + ' / ' + N(r.sigRedB, 0), '<b>' + N(r.SF, 2) + '</b>'],
     ]);
     step('R9', 'Alternating stress (fatigue)', [
-      [(r.ecc && r.bendFactor !== 1 ? 'σ<sub>a</sub> = k<sub>b</sub>·' : 'σ<sub>a</sub> = ') + 'Φ<sub>n</sub>·(F<sub>A,max</sub> − F<sub>A,min</sub>) / (2·A<sub>S</sub>)', (r.ecc && r.bendFactor !== 1 ? N(r.bendFactor, 2) + '·' : '') + N(r.Phi, 4) + '·(' + kN(r.FAmax) + ' − ' + kN(r.FAmin) + ') / (2·' + N(g.As, 1) + ')', N(r.sigA, 1) + ' MPa'],
+      OPX && OPX.atMin.open ? ['σ<sub>a</sub> = (σ<sub>S</sub>(F<sub>A,max</sub>) − σ<sub>S</sub>(F<sub>A,min</sub>)) / 2, opened joint at F<sub>V,min</sub> (tension + bending)', 'closed-joint formula would give ' + N(OPX.sigAlin, 1) + ' MPa', N(r.sigA, 1) + ' MPa'] : [(r.ecc && r.bendFactor !== 1 ? 'σ<sub>a</sub> = k<sub>b</sub>·' : 'σ<sub>a</sub> = ') + 'Φ<sub>n</sub>·(F<sub>A,max</sub> − F<sub>A,min</sub>) / (2·A<sub>S</sub>)', (r.ecc && r.bendFactor !== 1 ? N(r.bendFactor, 2) + '·' : '') + N(r.Phi, 4) + '·(' + kN(r.FAmax) + ' − ' + kN(r.FAmin) + ') / (2·' + N(g.As, 1) + ')', N(r.sigA, 1) + ' MPa'],
       ['σ<sub>ASV</sub> = 0.85·(150/d + 45)', '0.85·(150/' + N(g.d) + ' + 45)', N(r.sigASV, 1) + ' MPa'],
       state.rolledAfter ? ['σ<sub>ASG</sub> = (2 − F<sub>Sm</sub>/F<sub>0.2min</sub>)·σ<sub>ASV</sub>', '(2 − ' + kN(r.FSm) + '/' + kN(r.F02) + ')·' + N(r.sigASV, 1), N(r.sigASG, 1) + ' MPa'] : null,
       ['S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub> ≥ 1.2', r.sigA > 0 ? N(r.sigAS, 1) + ' / ' + N(r.sigA, 1) : 'static load', '<b>' + (isFinite(r.SD) ? N(r.SD, 2) : '—') + '</b>'],
@@ -604,7 +612,8 @@
     step('R7', 'Surface pressure under head and nut', r.pressures.map(p => [
       'p = max(F<sub>M,max</sub>, F<sub>S,max</sub>) / A<sub>p</sub>; ' + p.where, 'A<sub>p</sub> = π/4·(' + N(p.dOut, 2) + '² − ' + N(p.dIn, 2) + '²) = ' + N(p.Ap, 1) + ' mm²', N(p.p, 0) + ' MPa ≤ ' + N(p.pG, 0) + (p.est ? ' ~' : '') + ' → S<sub>p</sub> = ' + N(p.Sp, 2)]));
     step('R10–R12', 'Residual clamp load and slipping', [
-      ['F<sub>KR,min</sub> = F<sub>M,min</sub> − (1 − Φ<sub>n</sub>)·F<sub>A</sub> − F<sub>Z</sub> − ΔF<sub>Vth,loss</sub>', kN(r.FMmin) + ' − ' + kN(r.FPA) + ' − ' + kN(r.FZ) + ' − ' + kN(r.thLoss), '<b>' + kN(r.FKRmin) + '</b>'],
+      OPX && OPX.atMin.open ? ['F<sub>KR,min</sub> = F<sub>S</sub> − F<sub>A,max</sub> (contact force at the tipping side, opened joint at F<sub>V,min</sub>)', kN(OPX.atMin.FS) + ' − ' + kN(r.FAmax), '<b>' + kN(r.FKRmin) + '</b>']
+        : ['F<sub>KR,min</sub> = F<sub>M,min</sub> − (1 − Φ<sub>n</sub>)·F<sub>A</sub> − F<sub>Z</sub> − ΔF<sub>Vth,loss</sub>', kN(r.FMmin) + ' − ' + kN(r.FPA) + ' − ' + kN(r.FZ) + ' − ' + kN(r.thLoss), '<b>' + kN(r.FKRmin) + '</b>'],
       r.FQ > 0 ? ['S<sub>G</sub> = F<sub>KR,min</sub>·q<sub>F</sub>·μ<sub>T</sub> / F<sub>Q</sub>', kN(r.FKRmin) + '·' + r.qF + '·' + N(r.muT, 2) + ' / ' + kN(r.FQ), '<b>' + N(r.SG, 2) + '</b>'] : null,
     ].filter(Boolean));
     step('R13', 'Tightening torque', [

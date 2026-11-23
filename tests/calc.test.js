@@ -355,6 +355,35 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(si.cls === '12.9' && si.thread === 'M10', 'size input sets the class');
 }
 
+// ---- opened eccentric joint ----
+{
+  const ex = P.PRESETS.find(p => p.id === 'ecc-bracket').s;
+  const closed = C.calculate(stateFrom(ex));
+  ok(closed.ecc.open && !closed.ecc.open.atMin.open && closed.ecc.open.FabMin > 4000, 'bracket at 4 kN stays closed: unchanged');
+  const at = FA => C.calculate(stateFrom(Object.assign({}, ex, { FAmax: FA, FAmin: FA })));
+  const Fab = closed.ecc.open.FabMin / 1000;
+  near(Fab * 1000 * (1 - closed.ecc.PhiEn) + Fab * 1000 * closed.ecc.u * (closed.ecc.a - closed.ecc.ssym) / closed.ecc.den, closed.FVmin, 1e-9, 'F_Aab: closed-joint residual clamp load = F_KA');
+  const r1 = at(Fab * 0.999), r2 = at(Fab * 1.001);
+  ok(!r1.ecc.open.atMin.open && r2.ecc.open.atMin.open, 'opens just above F_Aab');
+  ok(Math.abs(r2.ecc.open.atMin.FS - (r2.FVmin + r2.ecc.PhiEn * r2.FAmax)) < 5, 'bolt force continuous at the opening limit');
+  const r3 = at(30), o = r3.ecc.open.atMin;
+  ok(o.FS > r3.FVmin + r3.ecc.PhiEn * 30000 && o.FS > r3.ecc.open.lever * 30000, 'opened: bolt force above the linear line and above the lever law');
+  const big = at(300).ecc.open;
+  ok(Math.abs(big.atMin.FS / 300000 / big.lever - 1) < 0.05, 'large loads: bolt force tends to the lever law F_A·ξ_A/ξ_B');
+  ok(o.x > 0 && o.x < 60 && o.gapU > 0, 'contact zone shorter than c_T, gap at U');
+  ok(r3.FSmax >= r3.ecc.open.FSmaxLin && at(45).FSmax > at(45).ecc.open.FSmaxLin && r3.FKRmin > 0 && Math.abs(r3.FKRmin - (o.FS - 30000)) < 1e-6, 'opened: higher F_S,max, contact force F_S − F_A stays positive');
+  ok(r3.status === 'error' && r3.checks.some(c => /one-sided/.test(c.label) && c.status === 'error'), 'opening not allowed: error');
+  const allowed = C.calculate(stateFrom(P.PRESETS.find(p => p.id === 'ecc-open').s));
+  ok(allowed.status === 'warn' && allowed.checks.some(c => /opening allowed/.test(c.label) && c.status === 'warn'), 'opening allowed example: warning only');
+  ok(allowed.FKerf < allowed.ecc.FKA, 'opening allowed: F_KA not in the required clamp load');
+  const cyc = C.calculate(stateFrom(Object.assign({}, ex, { FAmax: 30, FAmin: 0 })));
+  ok(cyc.sigA > cyc.ecc.open.sigAlin * 1.3, 'cyclic load through the opening: larger stress amplitude than the closed formula');
+  const mb = C.calculate(stateFrom(Object.assign({}, ex, { FAmax: 30, FAmin: 30, eccMB: 150 })));
+  ok(mb.ecc.open.FabMin < r3.ecc.open.FabMin && mb.ecc.open.atMin.FS > o.FS, 'a bending moment M_B opens the joint earlier and raises the bolt force');
+  const out = C.calculate(stateFrom(Object.assign({}, ex, { FAmax: 30, eccS: 40 })));
+  ok(out.ecc.open.outside && out.issues.some(i => /outside the interface/.test(i.text)), 'bolt outside the interface: warned');
+}
+
 // ---- different clamped parts in one pattern ----
 {
   const base = [{ mat: 'S235', t: 10 }, { mat: '6082T6', t: 15 }];

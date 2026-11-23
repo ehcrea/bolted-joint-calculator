@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=36">
+  <link rel="stylesheet" href="css/style.css?v=37">
   <script>
     try { const t = (localStorage.getItem('ehcrea.theme') || localStorage.getItem('bolt.theme')); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -28,7 +28,7 @@
       <img class="logo" src="icons/favicon.svg" alt="" width="30" height="30">
       <div>
         <h1>Bolted Joint Calculator</h1>
-        <p class="subtitle">Preload, torque &amp; strength · VDI 2230 method · draft v0.1</p>
+        <p class="subtitle">Preload, torque &amp; strength · VDI 2230 method · v0.5</p>
       </div>
     </div>
     <div class="toolbar">
@@ -211,6 +211,7 @@
             <label><span class="lt">Load line offset a</span> <span class="u">(mm)</span><input type="number" step="any" data-key="eccA"></label>
             <label><span class="lt">Opening edge u <span class="tip" tabindex="0" title="Distance from the centre of the interface to the edge where it opens first. Blank = c_T / 2.">ⓘ</span></span> <span class="u">(mm, blank = c<sub>T</sub>/2)</span><input type="number" step="any" min="0" data-key="eccU" placeholder="auto"></label>
             <label><span class="lt">Bending moment M<sub>B</sub> <span class="tip" tabindex="0" title="Working bending moment at the interface per bolt, in addition to the eccentric axial load (enters the clamp load against opening).">ⓘ</span></span> <span class="u">(N·m)</span><input type="number" step="any" data-key="eccMB"></label>
+            <label class="check" style="grid-column:1/-1"><input type="checkbox" data-key="eccOpen"> Opening allowed (rare or static overload) <span class="tip" tabindex="0" title="Accept one-sided opening of the interface. The clamp load against opening F_KA then no longer enters the required preload, and the opening check becomes a warning. Whether opening is allowed or not, once the joint opens the tool uses the opened-joint bolt forces (non-linear, towards the lever law) for the stress and fatigue checks.">ⓘ</span></label>
             <label><span class="lt">Bending inertia Ī<sub>Bers</sub> <span class="tip" tabindex="0" title="Substitute moment of inertia of the clamped parts in bending. Blank = estimate from a cylinder with the same axial resilience as δ_P, limited to I_BT of the interface. This estimate is on the low side (more bolt bending); enter a value from FEA or VDI 2230 Part 1 if you have one.">ⓘ</span></span> <span class="u">(mm⁴, blank = auto)</span><input type="number" step="any" min="0" data-key="eccI" placeholder="auto"></label>
           </div>
         </div>
@@ -348,6 +349,7 @@
         <p class="card-note">VDI 2230 Part 1 eccentric case: bending of the clamped parts changes the load factor (Φ<sub>en</sub>*), adds bending stress in the bolt and needs a clamp load F<sub>KA</sub> against one-sided opening.</p>
         <div class="drawing" id="ecc-view"></div>
         <div class="metrics" id="ecc-metrics"></div>
+        <div class="drawing" id="ecc-curve"></div>
       </div>
 
       <div class="card">
@@ -397,7 +399,7 @@
         <summary>Method, assumptions and references</summary>
         <div class="notes-body">
           <ul>
-            <li>The calculation follows <b>VDI 2230 Part 1 (2015)</b> for a single bolt with a <b>concentric</b> load (no bending, no prying). Eccentric loading, multi-bolt flanges and bending of the bolt (VDI 2230 Part 2) are not covered in this draft.</li>
+            <li>The calculation follows <b>VDI 2230 Part 1 (2015)</b> for a single bolt; the optional cards add eccentric clamping and loading, prying, bolt patterns with rigid or flexible flanges, and the NASA-STD-5020 checks. Finite-element methods (VDI 2230 Part 2) are not covered.</li>
             <li><b>Bolt resilience</b> δ<sub>S</sub> is the sum of the head, shank, free thread, engaged thread and nut / tapped thread zones (l<sub>SK</sub> = 0.5d hex, 0.4d socket head; l<sub>G</sub> = 0.5d; l<sub>M</sub> = 0.4d nut, 0.33d tapped thread).</li>
             <li><b>Plate resilience</b> δ<sub>P</sub> uses the deformation cone / sleeve substitute body with the cone angle φ from VDI 2230 eq. (5.1/42, 5.1/43). Parts of different materials are combined with a length-weighted series modulus.</li>
             <li><b>Embedding</b> f<sub>Z</sub> from VDI 2230 table 5 per thread, per head/nut bearing and per inner interface; transverse loads use the shear column. Inserts add one thread interface.</li>
@@ -406,7 +408,7 @@
             <li>Limiting surface pressures p<sub>G</sub> are from VDI 2230 table A9 where available; values marked ~ in the material library are typical estimates. Always check with the supplier's data for your exact material and condition.</li>
           </ul>
           <p>References: VDI 2230 Blatt 1:2015 <i>Systematic calculation of highly stressed bolted joints</i>; ISO 898-1, ISO 3506-1, ISO 261, ISO 724, ISO 273, ISO 4017, ISO 4032, ISO 4762, ISO 7089/7093, ISO 16047 (torque/clamp force testing), DIN 8140 (wire thread inserts); FED-STD-H28/2B (thread shear areas); Bickford, <i>Introduction to the Design and Behavior of Bolted Joints</i>.</p>
-          <p class="hint">This is a draft tool. Results are design guidance and do not replace testing or a full VDI 2230 analysis for safety-critical joints.</p>
+          <p class="hint">Results are design guidance and do not replace testing or a full VDI 2230 analysis for safety-critical joints.</p>
         </div>
       </details>
     </section>
@@ -422,7 +424,7 @@
 
   <dialog class="about" id="about" aria-labelledby="about-title">
     <form method="dialog"><button class="btn btn-icon about-close" title="Close" aria-label="Close">✕</button></form>
-    <div class="about-head"><img src="icons/favicon.svg" alt=""><div><h2 id="about-title">Bolted Joint Calculator</h2><p>Draft version 0.1 · by E. Tozlu</p></div></div>
+    <div class="about-head"><img src="icons/favicon.svg" alt=""><div><h2 id="about-title">Bolted Joint Calculator</h2><p>Version 0.5 · by E. Tozlu</p></div></div>
     <p>A free, browser-based tool for engineers, makers, designers and students to size and check bolted joints: preload, tightening torque, the joint diagram, the deformation cone of the clamped parts, embedding, temperature effects, fatigue, surface pressure under the head and thread stripping in nuts, tapped holes, Heli-Coil wire inserts and solid threaded inserts. All calculations run in your browser and every formula is shown with your numbers.</p>
     <p>The method follows the public literature on bolted joints, mainly VDI 2230 Part 1, with friction data from VDI 2230 and ISO 16047 coating specifications. Not affiliated with or endorsed by VDI or any fastener manufacturer. Heli-Coil is a trademark of its owner and is used only to name the insert type.</p>
     <p>Made by E. Tozlu. More engineering tools at <a href="https://tools.ehcrea.com" target="_blank" rel="noopener">tools.ehcrea.com</a> and <a href="https://ehcrea.com" target="_blank" rel="noopener">ehcrea.com</a>.</p>
@@ -508,7 +510,13 @@
       <li><b>Bolt bending:</b> the bending of the parts also bends the bolt. The alternating stress in R9 is multiplied by 1 + (a/Φ<sub>en</sub>* − s<sub>sym</sub>)·(l<sub>K</sub>/l<sub>ers</sub>)·(E<sub>S</sub>/E<sub>P</sub>)·π·d<sub>S</sub>³/(8·Ī<sub>Bers</sub>).</li>
       <li><b>Ī<sub>Bers</sub></b>, the bending inertia of the clamped parts, is estimated from a cylinder with the same axial resilience as δ<sub>P</sub>, limited to I<sub>BT</sub> of the contact face. This tends to be low, so bolt bending comes out on the safe side; enter a better value (FEA, or the deformation-body formulas of VDI 2230 Part 1) when you have one.</li>
     </ul>
-    <p class="about-meta">Valid only while the joint stays closed. Once it opens on one side, the bolt load rises steeply and non-linearly (VDI 2230 treats this separately); redesign so that it stays closed. The formulas follow VDI 2230 Part 1 (2015) in simplified form and should be checked against the guideline for critical joints. Do not combine with prying: both describe the same bending flange.</p>
+    <p><b>Opened joint.</b> Above the opening limit F<sub>Aab</sub> (where the closed-joint residual clamp load falls to F<sub>KA</sub>) the interface lifts at U and only a shrinking contact zone towards the far edge V carries the clamp load. The bolt force then rises faster than Φ<sub>en</sub>*·F<sub>A</sub> and tends to the lever law F<sub>S</sub> = F<sub>A</sub>·ξ<sub>A</sub>/ξ<sub>B</sub> (ξ = distance of the load line and of the bolt from V). The tool models this with an elastic no-tension interface: a stiff flange on an elastic layer over c<sub>T</sub> × b<sub>T</sub> with the axial resilience δ<sub>P</sub>, linear contact pressure and no tension, joined to the VDI line at F<sub>Aab</sub>. A bending moment M<sub>B</sub> is taken to grow with the load, so in this branch it moves the load line by M<sub>B</sub>/F<sub>A,max</sub>. Once the joint opens:</p>
+    <ul>
+      <li><b>F<sub>S,max</sub></b> (R8) and the <b>stress amplitude</b> (R9) use the opened bolt force, and the bolt bending adds the tilt of the flange to the bending of the parts. The card shows the bolt force against the load: closed line, opened curve and lever law.</li>
+      <li><b>F<sub>KR,min</sub></b> becomes the contact force left at the tipping side, F<sub>S</sub> − F<sub>A</sub>, which is what resists slip. The joint does not lift off as a whole while the load acts further out than the bolt.</li>
+      <li>The opening check fails unless <b>Opening allowed</b> is ticked; then F<sub>KA</sub> leaves the required clamp load and the check is a warning. Allow it only for rare or static overloads: under alternating loads the amplitude grows quickly and the gap lets fretting and corrosion in.</li>
+    </ul>
+    <p class="about-meta">The opened-joint branch is the tool's own engineering model, not the method of VDI 2230 Part 1 Annex D; check critical joints against the guideline or with FEA. The formulas follow VDI 2230 Part 1 (2015) in simplified form and should be checked against the guideline for critical joints. Do not combine with prying: both describe the same bending flange.</p>
 
     <h3 id="help-nasa">Aerospace check (NASA-STD-5020)</h3>
     <p>Spaceflight hardware for NASA follows NASA-STD-5020 (threaded fastening systems); ESA uses ECSS-E-HB-32-23A. Tick <b>Also check to NASA-STD-5020</b> in section 6 to run it next to VDI 2230 on the same joint. The main differences:</p>
@@ -557,10 +565,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=36"></script>
-  <script src="js/calc.js?v=36"></script>
-  <script src="js/presets.js?v=36"></script>
-  <script src="js/drawing.js?v=36"></script>
-  <script src="js/app.js?v=36"></script>
+  <script src="js/data.js?v=37"></script>
+  <script src="js/calc.js?v=37"></script>
+  <script src="js/presets.js?v=37"></script>
+  <script src="js/drawing.js?v=37"></script>
+  <script src="js/app.js?v=37"></script>
 </body>
 </html>

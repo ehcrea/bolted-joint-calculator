@@ -2,7 +2,7 @@
 
 **Live:** https://ehcrea.github.io/bolted-joint-calculator/
 
-**Status:** draft v0.1. The calculation core and visuals work; translations, inch units and more joint types are still to come (see the roadmap).
+**Status:** v0.5. The calculation core and visuals work; translations, inch units and more joint types are still to come (see the roadmap).
 
 A browser-based tool for engineers, makers, designers and students to **size and check bolted joints**. Pick the joint type, the bolt, the stack of clamped parts, the friction and the tightening method, and the loads. It returns the **tightening torque** and runs the checks of the **VDI 2230 Part 1** method, showing every formula with your numbers.
 
@@ -19,7 +19,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 - **Thread stripping and engagement length** for a nut, a tapped hole, a **Heli-Coil** (wire thread insert, STI hole) or a **solid threaded insert**: strength of each thread against the bolt breaking load and the engagement length needed for the bolt to break first
 - **Bolt length** from clamp length and engagement, rounded to a standard length
 - **Bolt patterns**: circular, rectangular or **custom bolt positions** (pasted x, y list from any origin, general Σxy solution for unsymmetric patterns) with **mixed bolt sizes, property classes, joint types and clamped parts** (nut, tapped, Heli-Coil, insert in one pattern, named part stacks such as a thicker boss at some bolts; tension shared by joint stiffness, shear by stress area, every bolt type checked with VDI 2230) with forces and moments on the flange; rigid-flange load distribution (centroid model for closed joints, heel model for opened joints) or a **flexible flange** (beam on elastic bolt supports with the VDI 2230 joint stiffness, compared with the rigid result, flange bending check), off-centre axial load, plan view with the tension and shear on each bolt, and the most loaded bolt checked with all the methods above
-- **Eccentric clamping and loading** (VDI 2230 Part 1, joint closed): load factor Φ<sub>en</sub>* from the bending resilience of the parts, clamp load F<sub>KA</sub> against one-sided opening, and the bolt bending factor on the alternating stress; bending inertia estimated or entered
+- **Eccentric clamping and loading** (VDI 2230 Part 1): load factor Φ<sub>en</sub>* from the bending resilience of the parts, clamp load F<sub>KA</sub> against one-sided opening, and the bolt bending factor on the alternating stress; bending inertia estimated or entered. **Opened eccentric joints**: opening limit F<sub>Aab</sub>, non-linear bolt force beyond it towards the lever law (elastic no-tension interface), opened-joint stress amplitude with flange tilt, contact force, gap, bolt force chart, and an “opening allowed” option for rare overloads
 - **Galling warnings** for stainless and titanium bolts: like-material mating threads (nut, Heli-Coil, tapped stainless or titanium), dry or steel-only friction options, thread-locker and custom friction notes, with prevention advice
 - **Prying** of T-stub and angle flanges: Douty & McGuire prying ratio, prying force added to the bolt load, flange bending checks at the web face and the bolt line
 - **Aerospace check (NASA-STD-5020)**, optional: preload range from the torque range and the preload uncertainty Γ, relaxation, running torque of locking features, factors of safety and fitting factor, and margins of safety for separation, slip, yield, ultimate tension, thread shear-out, bolt shear and tension–shear interaction
@@ -36,7 +36,7 @@ A browser-based tool for engineers, makers, designers and students to **size and
 
 ## Examples
 
-28 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
+29 application examples, sorted from the smallest bolt to the largest, from M2.5 up to M16 slip-critical splices. Small fasteners: M4 bolt and nut through thin sheets, M4 stainless into aluminium, M3 with a Heli-Coil in magnesium, four **electronics enclosure** joints (stainless M2.5 to M4 screws in 5083 / 6061 aluminium with Heli-Coils, including a −55 K cold soak and a spacer sleeve that brings l<sub>K</sub>/d above 3), and two **PCB mounts** (M3 to a brass standoff, M3 into an aluminium housing with +50 K). The PCB cases show why circuit boards need care: FR-4 is soft through its thickness, so the board dominates the joint stiffness, and embedding and creep take a large share of the small preload.
 
 ## Libraries
 
@@ -51,9 +51,9 @@ A browser-based tool for engineers, makers, designers and students to **size and
 
 Values marked ~ are typical estimates and not from VDI 2230: check them against your supplier's data.
 
-## Scope and limits of this draft
+## Scope and limits
 
-- Single bolt with a concentric or eccentric axial load. Bolt patterns use a rigid flange or, for rectangular patterns, a flexible flange as a beam along x (rigid base, joint closed); prying uses an elastic T-stub formula; the eccentric case is valid only while the joint stays closed (opened joints are not covered), and its bending inertia Ī<sub>Bers</sub> is a simplified estimate
+- Single bolt with a concentric or eccentric axial load. Bolt patterns use a rigid flange or, for rectangular patterns, a flexible flange as a beam along x (rigid base, joint closed); prying uses an elastic T-stub formula; an opened eccentric joint uses the tool's own elastic no-tension interface model (not VDI 2230 Annex D), and its bending inertia Ī<sub>Bers</sub> is a simplified estimate
 - Clamped parts of different materials are combined with one series modulus in the cone model (VDI 2230 treats each layer separately)
 - The compliance of a soft material around a threaded insert is not included in the bolt resilience
 - Thread stripping uses the ISO basic profile shear areas with simplified reduction factors
@@ -92,7 +92,7 @@ The tests check the stress areas against ISO 898-1, the permissible preload agai
 ## Roadmap
 
 - Translations (DE, NL, TR, ES) and inch units / UNC-UNF threads, like the other ehcrea tools
-- Opened eccentric joints, plastic T-stub models (EN 1993-1-8, AISC), plate (2-D) flanges and flexible bases
+- Plastic T-stub models (EN 1993-1-8, AISC), plate (2-D) flanges and flexible bases
 - Per-layer cone model, countersunk and flange heads, reduced-shank (waisted) bolts
 - Heat-set and press-in inserts for plastics and 3D prints, self-tapping screws in plastics
 - PDF report, unit converter, SEO language pages and social image
