@@ -68,11 +68,13 @@
       const b = e.target.closest('[data-detail]');
       if (!b) return;
       const oldSize = C.findThread(state.thread).id, oldCls = state.cls, oldJoint = state.joint;
-      const parts = b.dataset.detail.split(' '), newJoint = parts[2];
+      const parts = b.dataset.detail.split(' '), newJoint = parts[2], newStack = parts[3] || '';
+      const stacks = C.parseStacks(state.patStacks, state.plates).stacks;
+      const newPlates = newStack ? stacks[newStack] : null;
       let jp = null;
       if (newJoint !== oldJoint) {
         // same stack of parts with the other joint type (the last part becomes / stops being the threaded part)
-        const o = C.jointParts(calcInput(), newJoint, C.findThread(parts[0]).d);
+        const o = C.jointParts(Object.assign(calcInput(), newPlates ? { plates: newPlates } : {}), newJoint, C.findThread(parts[0]).d);
         if (o.jointError) { alert('Cannot switch to this joint type: it ' + o.jointError + '.'); return; }
         jp = o;
       }
@@ -86,6 +88,24 @@
         const add = (hasSize ? '' : ', ' + oldSize) + (hasCls ? '' : ', ' + oldCls) + (hasJoint || newJoint === oldJoint ? '' : ', ' + oldJoint);
         return add ? l.replace(/\s+$/, '') + add : l;
       }).join('\n');
+      if (newPlates) {
+        // another part stack: it becomes section 2, the old section 2 parts are kept as a named stack
+        const key = ps => ps.map(p => p.mat + ' ' + +p.t).join(', ');
+        let base = Object.keys(stacks).find(nm => nm !== newStack && key(stacks[nm]) === key(state.plates));
+        if (!base) {
+          let k = 2;
+          base = 'base';
+          while (stacks[base]) base = 'base' + k++;
+          state.patStacks = (String(state.patStacks || '').replace(/\s+$/, '') + '\n' + base + ': ' + key(state.plates)).replace(/^\n/, '');
+        }
+        state.patPts = state.patPts.split(/\r?\n/).map(l => {
+          const s = l.replace(/#.*/, '').trim();
+          if (!s || s.includes(';') || s.split(/[\s,]+/).filter(Boolean).length < 2) return l;
+          if (new RegExp('@' + newStack.replace(/[.-]/g, '\\$&') + '(?![\\w.-])').test(s)) return l.replace(new RegExp('\\s*,?\\s*@' + newStack.replace(/[.-]/g, '\\$&') + '(?![\\w.-])'), '');
+          return /@[\w.-]/.test(s) ? l : l.replace(/\s+$/, '') + ', @' + base;
+        }).join('\n');
+        state.plates = newPlates.map(p => Object.assign({}, p));
+      }
       if (jp) Object.assign(state, jp);
       state.thread = parts[0];
       state.cls = parts[1];
@@ -381,6 +401,8 @@
       `${MX ? `<td class="left">${b.label}</td>` : ''}<td>${f(b.xu, 1)}</td><td>${f(b.yu, 1)}</td><td class="strong">${f(b.FA / 1000, 3)}${b.FA < 0 ? ' <span class="hint">(less clamp)</span>' : ''}</td>${FX ? `<td>${f(b.FArigid / 1000, 3)}</td>` : ''}${MX && P.weighted ? `<td>${f(b.FAeq / 1000, 3)}</td>` : ''}<td>${f(b.FQ / 1000, 3)}</td></tr>`).join('');
     $('#pat-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
     $('#pat-pts-info').innerHTML = P.custom ? P.n + ' bolts read' + (P.bad.length ? ', line ' + P.bad.join(', ') + ' ignored' : '') + '. Centroid C at (' + f(P.cx0, 1) + ', ' + f(P.cy0, 1) + ') mm.' : '';
+    const stk = P.custom ? C.parseStacks(state.patStacks, state.plates) : null, names = stk ? Object.keys(stk.stacks) : [];
+    $('#pat-stacks-info').innerHTML = !stk ? '' : (names.length ? names.map(nm => '@' + nm + ': ' + stk.stacks[nm].map(p => p.mat + ' ' + f(p.t, 1)).join(' + ') + ' = ' + f(stk.stacks[nm].reduce((s, p) => s + p.t, 0), 1) + ' mm').join(' · ') : 'No part stacks: every bolt clamps the parts of section 2.') + (stk.bad.length ? ' Line ' + stk.bad.join(', ') + ' ignored.' : '');
     $('#pat-sizes').hidden = !MX;
     if (MX) {
       const worst = cs => cs.some(c => c.status === 'error') ? 'error' : cs.some(c => c.status === 'warn') ? 'warn' : 'ok';

@@ -14,7 +14,7 @@
     nFSy: 1.25, nFSu: 1.4, nFSsep: 1.2, nFSslip: 1.2, nFF: 1.15,
     patOn: false, patType: 'circle', patMethod: 'centroid', patN: 6, patPCD: 100, patAngle: 90, patDf: 130,
     patNx: 2, patNy: 2, patSx: 80, patSy: 60, patPerimeter: true, patLx: 110, patLy: 90,
-    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0, patXF: 0, patYF: 0, patFlex: false, patFt: '', patPts: '', patEdge: 15, partT: '',
+    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0, patXF: 0, patYF: 0, patFlex: false, patFt: '', patPts: '', patStacks: '', patEdge: 15, partT: '',
     pryOn: false, pryA: 30, pryB: 25, pryW: 60, pryT: '',
     eccOn: false, eccC: 50, eccB: 40, eccS: 0, eccA: 0, eccU: '', eccMB: 0, eccI: '',
   };
@@ -85,6 +85,13 @@
       plates: [{ mat: '6061T6', t: 3 }, { mat: '1.4301', t: 10 }], tapMat: '6061T6', hcLen: 2, DA: 10, rough: 'fine', friction: 'ss-paste',
       method: 'tw-test', mode: 'nu', nu: 0.9, FAmax: 0.1, FAmin: 0, FQ: 0.05, muT: 0.15, dT: -55 } },
     // Bolt patterns: loads on the whole flange, distributed with the rigid-flange model.
+    { id: 'pat-stacks', label: 'M10 8.8 cover, middle row through a 45 mm boss (different clamped parts in one pattern)', s: {
+      joint: 'nut', thread: 'M10', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 10 }, { mat: 'S235', t: 15 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FQ: 0, n: 0.5,
+      patOn: true, patType: 'custom', patStacks: 'boss: S235 10, S235 45',
+      patPts: '0, 0\n100, 0\n0, 60, @boss\n100, 60, @boss\n0, 120\n100, 120', patEdge: 15,
+      patFz: 30, patXF: 50, patYF: 60, patMx: 1500, patFy: 4, patR: 0.5 } },
     { id: 'pat-joints', label: 'M10 10.9 bracket: through-bolts with nuts + screws tapped into the frame (mixed joint types)', s: {
       joint: 'nut', thread: 'M10', cls: '10.9', head: 'hex', washer: '7089', washerGrade: '300HV', washerNut: true,
       plates: [{ mat: 'S235', t: 12 }, { mat: 'S235', t: 25 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',

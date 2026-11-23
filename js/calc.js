@@ -95,6 +95,28 @@
     return D.BOLT_CLASSES[k] ? k : null;
   }
 
+  // Part stacks for a pattern: one per line, "name: part, part, ...", a part being "material thickness" (e.g.
+  // 6082T6 8) or a thickness alone, which keeps the material at that position in section 2. Bolt lines use @name.
+  function parseStacks(text, basePlates) {
+    const stacks = {}, bad = [];
+    const keys = Object.keys(D.MATERIALS), find = t => keys.find(k => k.toLowerCase() === String(t).toLowerCase());
+    String(text || '').split(/\r?\n/).forEach((line, i) => {
+      const s = line.replace(/#.*/, '').trim();
+      if (!s) return;
+      const m = s.match(/^@?([\w.-]+)\s*:\s*(.+)$/);
+      if (!m) { bad.push(i + 1); return; }
+      const plates = [];
+      let ok = true;
+      m[2].split(/[,;]/).map(e => e.trim()).filter(Boolean).forEach((e, j) => {
+        const tok = e.split(/\s+/);
+        const t = +tok[tok.length - 1], mat = tok.length > 1 ? find(tok.slice(0, -1).join(' ')) : (basePlates && basePlates[j] ? basePlates[j].mat : null);
+        if (isFinite(t) && t > 0 && mat && tok.length <= 2) plates.push({ mat, t }); else ok = false;
+      });
+      if (ok && plates.length && plates.length <= 5) stacks[m[1]] = plates; else bad.push(i + 1);
+    });
+    return { stacks, bad };
+  }
+
   // Joint type written in a bolt list: nut, tapped (tap), helicoil (heli-coil, hc), insert.
   const JOINT_LABEL = { nut: 'nut', tapped: 'tapped', helicoil: 'Heli-Coil', insert: 'insert' };
   function normJoint(t) {
@@ -111,19 +133,20 @@
       if (!s) return;
       const tok = s.split(/[\s,;]+/).filter(Boolean);
       const m = tok.slice(0, 2).map(Number);
-      let size = null, cls = null, joint = null, ok = tok.length >= 2 && isFinite(m[0]) && isFinite(m[1]);
+      let size = null, cls = null, joint = null, stack = null, ok = tok.length >= 2 && isFinite(m[0]) && isFinite(m[1]);
       // optional thread size (M6, M10x1.25), property class (8.8, 12.9, A4-70, Ti5) and joint type
       // (nut, tapped, helicoil, insert), in any order
       if (ok) tok.slice(2).forEach(t => {
         const id = t.replace(/^m/, 'M').replace(/[×X]/g, 'x');
         const th = /^M\d/.test(id) ? D.threadList().find(q => q.id === id) : null;
-        const c = normClass(t), j = normJoint(t);
-        if (th && !size) size = th.id;
+        const c = normClass(t), j = normJoint(t), st = /^@[\w.-]+$/.test(t) ? t.slice(1) : null;
+        if (st && !stack) stack = st;
+        else if (th && !size) size = th.id;
         else if (c && !cls) cls = c;
         else if (j && !joint) joint = j;
         else ok = false;
       });
-      if (ok) { const p = { x: m[0], y: m[1] }; if (size) p.size = size; if (cls) p.cls = cls; if (joint) p.joint = joint; pts.push(p); }
+      if (ok) { const p = { x: m[0], y: m[1] }; if (size) p.size = size; if (cls) p.cls = cls; if (joint) p.joint = joint; if (stack) p.stack = stack; pts.push(p); }
       else bad.push(i + 1);
     });
     return { pts, bad };
@@ -137,7 +160,7 @@
       const pp = parsePoints(inp.patPts);
       const n = pp.pts.length;
       const cx = n ? pp.pts.reduce((s, p) => s + p.x, 0) / n : 0, cy = n ? pp.pts.reduce((s, p) => s + p.y, 0) / n : 0;
-      pts = pp.pts.map(p => ({ x: p.x - cx, y: p.y - cy, size: p.size || null, cls: p.cls || null, joint: p.joint || null }));
+      pts = pp.pts.map(p => ({ x: p.x - cx, y: p.y - cy, size: p.size || null, cls: p.cls || null, joint: p.joint || null, stack: p.stack || null }));
       pts.cx = cx; pts.cy = cy; pts.bad = pp.bad;
       return pts;
     }
@@ -265,7 +288,7 @@
       return { i: i + 1, x: p.x, y: p.y, xu: p.x + pts.cx, yu: p.y + pts.cy, h: p.h, FA, FAt: Math.max(0, FA), qx, qy, FQ: Math.hypot(qx, qy) };
     });
     const mainId = findThread(inp.thread).id;
-    bolts.forEach((b, i) => { b.size = pts[i].size || mainId; b.cls = pts[i].cls || inp.cls; b.joint = pts[i].joint || inp.joint; b.type = b.size + ' ' + b.cls + ' ' + b.joint; });
+    bolts.forEach((b, i) => { b.size = pts[i].size || mainId; b.cls = pts[i].cls || inp.cls; b.joint = pts[i].joint || inp.joint; b.stack = pts[i].stack || ''; b.type = b.size + ' ' + b.cls + ' ' + b.joint + ' ' + b.stack; });
     let weighted = null;
     if (wts) {
       const k = wts.k, A = wts.A, sum = a => a.reduce((s, v) => s + v, 0);
@@ -333,7 +356,8 @@
   // (engagement, custom hole) are scaled by d; a given torque belongs to the main bolt, so the other types are
   // tightened to the utilisation ν instead; insert outer threads fall back to their defaults for another size.
   // Another joint type uses the same stack of parts (see jointParts).
-  function sizeInput(inp, size, extra, cls, joint) {
+  function sizeInput(inp, size, extra, cls, joint, plates) {
+    if (plates) inp = Object.assign({}, inp, { plates: plates.map(p => Object.assign({}, p)) });
     const d1 = findThread(size).d, f = d1 / findThread(inp.thread).d;
     const o = Object.assign({}, inp, { thread: size, patOn: false }, cls ? { cls } : {});
     if (+inp.engage > 0) o.engage = +inp.engage * f;
@@ -383,16 +407,23 @@
       }
       // mixed bolt types (custom positions with a size and/or property class per line): weights from each type's
       // joint stiffness and stress area, and a full check of every type under its own highest loads
-      const mainId = findThread(inp.thread).id, mainType = mainId + ' ' + inp.cls + ' ' + inp.joint;
+      const mainId = findThread(inp.thread).id, mainType = mainId + ' ' + inp.cls + ' ' + inp.joint + ' ';
       const ptsS = patternBolts(inp);
-      const typeOf = p => (p.size || mainId) + ' ' + (p.cls || inp.cls) + ' ' + (p.joint || inp.joint);
+      const stk = parseStacks(inp.patStacks, inp.plates);
+      const typeOf = p => (p.size || mainId) + ' ' + (p.cls || inp.cls) + ' ' + (p.joint || inp.joint) + ' ' + (p.stack || '');
       const types = [...new Set(ptsS.map(typeOf))];
-      const split = t => { const q = t.split(' '); return { size: q[0], cls: q[1], joint: q[2] }; };
+      const split = t => { const q = t.split(' '); return { size: q[0], cls: q[1], joint: q[2], stack: q[3] || '' }; };
+      const platesOf = q => (q.stack ? stk.stacks[q.stack] : null);
+      if (inp.patType === 'custom') {
+        if (stk.bad.length) add('warn', 'Part stacks: line ' + stk.bad.join(', ') + ' could not be read and is ignored. Write name: material thickness, material thickness (e.g. boss: 6082T6 8, S235 12); a thickness alone keeps the material of section 2.');
+        const unknown = [...new Set(ptsS.filter(p => p.stack && !stk.stacks[p.stack]).map(p => '@' + p.stack))];
+        if (unknown.length) add('error', 'Bolt pattern: the part stack ' + unknown.join(', ') + ' is not defined. Add it to the part stacks, e.g. ' + unknown[0].slice(1) + ': S235 10, S235 20.');
+      }
       const mixed = inp.patType === 'custom' && (types.length > 1 || types[0] !== mainType);
       let wts = null, plain = null;
       if (mixed && ptsS.length >= 2) {
         plain = {};
-        types.forEach(t => { const q = split(t); const si = sizeInput(inp, q.size, { pryOn: false, eccOn: false, nasa: false, FAmax: 0, FAmin: 0, FQ: 0 }, q.cls, q.joint); plain[t] = si.jointError ? { valid: false, issues: [{ level: 'error', text: si.jointError }] } : calculate(si); });
+        types.forEach(t => { const q = split(t); if (q.stack && !platesOf(q)) { plain[t] = { valid: false, issues: [] }; return; } const si = sizeInput(inp, q.size, { pryOn: false, eccOn: false, nasa: false, FAmax: 0, FAmin: 0, FQ: 0 }, q.cls, q.joint, platesOf(q)); plain[t] = si.jointError ? { valid: false, issues: [{ level: 'error', text: si.jointError }] } : calculate(si); });
         if (types.every(t => plain[t].valid)) {
           const kOf = t => 1 / plain[t].res.deltaS + 1 / plain[t].res.deltaP;
           wts = { k: ptsS.map(p => kOf(typeOf(p))), A: ptsS.map(p => plain[typeOf(p)].g.As) };
@@ -406,20 +437,23 @@
         pat.mixedSize = new Set(ptsS.map(p => p.size || mainId)).size > 1 || !ptsS.some(p => (p.size || mainId) === mainId);
         pat.mixedClass = new Set(ptsS.map(p => p.cls || inp.cls)).size > 1 || !ptsS.some(p => (p.cls || inp.cls) === inp.cls);
         pat.mixedJoint = new Set(ptsS.map(p => p.joint || inp.joint)).size > 1 || !ptsS.some(p => (p.joint || inp.joint) === inp.joint);
-        const labelOf = q => q.size + ' ' + q.cls + (pat.mixedJoint ? ' · ' + JOINT_LABEL[q.joint] : '');
+        pat.mixedStack = ptsS.some(p => p.stack);
+        pat.stacks = stk.stacks;
+        const labelOf = q => q.size + ' ' + q.cls + (pat.mixedJoint ? ' · ' + JOINT_LABEL[q.joint] : '') + (pat.mixedStack ? ' · ' + (q.stack ? '@' + q.stack : 'section 2 parts') : '');
         pat.bolts.forEach(b => { b.label = labelOf(b); });
         pat.groups = types.map(t => {
           const q = split(t), bs = pat.bolts.filter(b => b.type === t);
           const FA = Math.max(0, ...bs.map(b => b.FA)), FQ = Math.max(0, ...bs.map(b => b.FQ));
-          return { type: t, label: labelOf(q), size: q.size, cls: q.cls, joint: q.joint, d: findThread(q.size).d, main: t === mainType, bolts: bs, n: bs.length, FAmax: FA, FQmax: FQ,
+          return { type: t, label: labelOf(q), size: q.size, cls: q.cls, joint: q.joint, stack: q.stack, plates: platesOf(q) || inp.plates, d: findThread(q.size).d, main: t === mainType, bolts: bs, n: bs.length, FAmax: FA, FQmax: FQ,
             k: plain && plain[t].valid ? 1 / plain[t].res.deltaS + 1 / plain[t].res.deltaP : NaN, As: plain && plain[t].valid ? plain[t].g.As : NaN };
-        }).sort((a, b) => a.d - b.d || (a.size < b.size ? -1 : a.size > b.size ? 1 : clsOrder.indexOf(a.cls) - clsOrder.indexOf(b.cls)) || jOrder.indexOf(a.joint) - jOrder.indexOf(b.joint));
+        }).sort((a, b) => a.d - b.d || (a.size < b.size ? -1 : a.size > b.size ? 1 : clsOrder.indexOf(a.cls) - clsOrder.indexOf(b.cls)) || jOrder.indexOf(a.joint) - jOrder.indexOf(b.joint) || (a.stack < b.stack ? -1 : a.stack > b.stack ? 1 : 0));
         const mg = pat.groups.find(g => g.main);
         if (mg) { pat.FAmax = mg.FAmax; pat.FQmax = mg.FQmax; pat.critA = mg.bolts.reduce((a, b) => (b.FA > a.FA ? b : a), mg.bolts[0]); pat.critQ = mg.bolts.reduce((a, b) => (b.FQ > a.FQ ? b : a), mg.bolts[0]); pat.sameBolt = pat.critA === pat.critQ || pat.critA.FQ >= pat.critQ.FQ * (1 - 1e-9); if (pat.sameBolt) pat.critQ = pat.critA; }
-        else add('warn', 'Mixed bolts: no bolt in the pattern is the ' + labelOf(split(mainType)) + ' from sections 1–3, so the detailed results below are for that bolt under the highest load of the pattern. Each bolt type used is checked in the table of the bolt pattern card; open one with “Check in detail”.');
+        else add('warn', 'Mixed bolts: no bolt in the pattern is the ' + labelOf(split(mainType)) + ' from sections 1–3' + (pat.mixedStack ? ' with the section 2 parts' : '') + ', so the detailed results below are for that bolt under the highest load of the pattern. Each bolt type used is checked in the table of the bolt pattern card; open one with “Check in detail”.');
         // full check of every other type under its own worst loads
         pat.groups.filter(g => !g.main).forEach(g => {
-          const si = sizeInput(inp, g.size, { FAmax: g.FAmax / 1000, FAmin: pat.ratio * g.FAmax / 1000, FQ: g.FQmax / 1000 }, g.cls, g.joint);
+          if (g.stack && !platesOf(g)) { g.r = { valid: false, issues: [] }; return; }
+          const si = sizeInput(inp, g.size, { FAmax: g.FAmax / 1000, FAmin: pat.ratio * g.FAmax / 1000, FQ: g.FQmax / 1000 }, g.cls, g.joint, platesOf(g));
           const sub = si.jointError ? { valid: false, issues: [{ level: 'error', text: si.jointError }] } : calculate(si);
           g.r = sub; g.input = si;
           if (!sub.valid) { add('error', g.label + ' bolts in the pattern: ' + ((sub.issues[0] || {}).text || 'no valid result')); return; }
@@ -1011,7 +1045,7 @@
     return dec > 0 ? s.replace(/\.?0+$/, '') || '0' : s;
   }
 
-  const CALC = { calculate, boltPattern, patternBolts, parsePoints, sizeInput, jointParts, normClass, normJoint, JOINT_LABEL, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
+  const CALC = { calculate, boltPattern, patternBolts, parsePoints, parseStacks, sizeInput, jointParts, normClass, normJoint, JOINT_LABEL, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
   if (typeof module !== 'undefined' && module.exports) module.exports = CALC;
   else root.BJ_CALC = CALC;
 })(typeof window !== 'undefined' ? window : globalThis);

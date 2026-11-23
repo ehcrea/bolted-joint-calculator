@@ -355,6 +355,36 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(si.cls === '12.9' && si.thread === 'M10', 'size input sets the class');
 }
 
+// ---- different clamped parts in one pattern ----
+{
+  const base = [{ mat: 'S235', t: 10 }, { mat: '6082T6', t: 15 }];
+  const ps = C.parseStacks('boss: S235 10, S235 45\n@spacer: 8, 30 # comment\nbad line\nx: S999 5\n\nlong: 1, 1, 1, 1, 1, 1', base);
+  ok(ps.stacks.boss && ps.stacks.boss[1].mat === 'S235' && ps.stacks.boss[1].t === 45, 'stack with materials parsed');
+  ok(ps.stacks.spacer && ps.stacks.spacer[0].mat === 'S235' && ps.stacks.spacer[1].mat === '6082T6' && ps.stacks.spacer[1].t === 30, 'thickness alone keeps the section-2 material at that position');
+  ok(ps.bad.join() === '3,4,6', 'unreadable line, unknown material, more than 5 parts rejected');
+  ok(C.parseStacks('b: s235 5, 6082t6 7').stacks.b[1].mat === '6082T6', 'material names ignore case');
+  const pp = C.parsePoints('0, 0, @boss\n1, 0, M6, @boss, tapped\n2, 0, @a, @b');
+  ok(pp.pts[0].stack === 'boss' && pp.pts[1].stack === 'boss' && pp.pts[1].size === 'M6' && pp.pts[1].joint === 'tapped' && pp.bad[0] === 3, '@stack token parsed, two stacks rejected');
+  ok(C.sizeInput({ thread: 'M10', plates: base }, 'M10', null, null, null, ps.stacks.boss).plates[1].t === 45, 'size input takes the stack');
+  const ex = P.PRESETS.find(p => p.id === 'pat-stacks').s;
+  const r = C.calculate(stateFrom(ex)), PT = r.pat;
+  ok(PT.mixed && PT.mixedStack && !PT.mixedSize && !PT.mixedClass && !PT.mixedJoint && PT.groups.length === 2, 'two part stacks: two bolt types');
+  const gM = PT.groups.find(g => g.main), gB = PT.groups.find(g => g.stack === 'boss');
+  ok(gB.r.valid && Math.abs(gB.r.lK - r.lK - 30) < 1e-9, 'the boss bolts are checked with their own clamp length (30 mm longer)');
+  ok(gB.k < gM.k && PT.bolts[2].FA < PT.bolts[2].FAeq, 'the longer, softer boss bolts take less than equal sharing');
+  near(PT.bolts.reduce((s, b) => s + b.FA, 0), 30000, 1e-9, 'part stacks: Σ F_A = F_z');
+  ok(r.status !== 'error', 'part stack example passes');
+  ok(/@boss/.test(gB.label) && /section 2 parts/.test(gM.label), 'labels name the stack');
+  const same = C.calculate(stateFrom(Object.assign({}, ex, { patStacks: 'boss: S235 10, S235 15' }))).pat;
+  const plainP = C.calculate(stateFrom(Object.assign({}, ex, { patPts: ex.patPts.replace(/, @boss/g, '') }))).pat;
+  same.bolts.forEach((b, i) => near(b.FA, plainP.bolts[i].FA, 1e-9, 'stack equal to section 2: same sharing, bolt ' + b.i));
+  const unk = C.calculate(stateFrom(Object.assign({}, ex, { patStacks: '' })));
+  ok(unk.issues.some(i => i.level === 'error' && /@boss is not defined/.test(i.text)), 'undefined stack: error');
+  const tp = C.calculate(stateFrom(Object.assign({}, ex, { patPts: ex.patPts.replace(/@boss/g, '@boss, tapped') }))).pat;
+  const gT = tp.groups.find(g => g.stack === 'boss');
+  ok(gT.joint === 'tapped' && gT.r.valid && gT.input.tapMat === 'S235' && gT.input.plates.length === 1 && gT.r.lK < r.lK, 'stack + tapped: the last part of the stack becomes the threaded part');
+}
+
 // ---- different joint types in one pattern ----
 {
   ok(C.normJoint('Tapped') === 'tapped' && C.normJoint('hc') === 'helicoil' && C.normJoint('Heli-Coil') === 'helicoil' && C.normJoint('nut') === 'nut' && C.normJoint('bolt') === null, 'joint type names');
