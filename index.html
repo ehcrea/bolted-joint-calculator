@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
-  <link rel="stylesheet" href="css/style.css?v=37">
+  <link rel="stylesheet" href="css/style.css?v=38">
   <script>
     try { const t = (localStorage.getItem('ehcrea.theme') || localStorage.getItem('bolt.theme')); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { /* storage unavailable */ }
   </script>
@@ -200,6 +200,10 @@
           <label><span class="lt">Bolt to flange edge a <span class="tip" tabindex="0" title="Distance from the bolt centre line to the outer edge of the flange, where the prying force acts. Limited to 1.25·b.">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryA"></label>
           <label><span class="lt">Flange width per bolt w <span class="tip" tabindex="0" title="Length of flange along the web that one bolt carries (the bolt spacing, or the edge distance at the ends).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryW"></label>
           <label><span class="lt">Flange thickness t <span class="tip" tabindex="0" title="Leave blank to use the thickness of the first clamped part.">ⓘ</span></span> <span class="u">(mm, blank = part 1)</span><input type="number" step="any" min="0" data-key="pryT" placeholder="part 1"></label>
+          <label><span class="lt">Plastic T-stub check <span class="tip" tabindex="0" title="Ultimate limit state of the flange and bolt with plastic hinges, per bolt (half a T-stub or one angle leg), under the design load γ·T. EN 1993-1-8 Table 6.2: failure modes 1, 2 and 3 (or no prying when the bolt is long). AISC Manual Part 9: available tension with prying and the required flange thickness. The elastic prying above still sets the service bolt load for VDI 2230.">ⓘ</span></span>
+            <select data-key="pryUlt"><option value="none">None</option><option value="en">EN 1993-1-8</option><option value="aisc">AISC Manual Part 9</option><option value="both">Both</option></select></label>
+          <label data-show="pry-ult"><span class="lt">Design load factor γ <span class="tip" tabindex="0" title="Factor from the service load T per bolt to the design (ultimate) load: e.g. 1.35–1.5 (Eurocode), 1.2–1.6 (AISC LRFD). The resistances use the partial factors of the code (γM0 = 1.0, γM2 = 1.25; φ = 0.75 for bolts, 0.90 for the flange).">ⓘ</span></span><input type="number" step="any" min="1" data-key="pryGamma"></label>
+          <label data-show="pry-ult"><span class="lt">Fillet radius r <span class="tip" tabindex="0" title="EN 1993-1-8 only: m = b − 0.8·r for a rolled section (r = root radius); for a welded web enter 0.8·√2·a_w / 0.8 = √2·a_w with the weld throat a_w. Blank = 0 (m = b, on the safe side).">ⓘ</span></span> <span class="u">(mm)</span><input type="number" step="any" min="0" data-key="pryR" placeholder="0"></label>
         </div>
         <label class="check"><input type="checkbox" data-key="eccOn"> Eccentric clamping and loading (VDI 2230) <span class="tip" tabindex="0" title="The bolt is not in the middle of the clamped interface, or the load does not act on the bolt axis. Bending of the parts raises the bolt load factor, bends the bolt and can open the joint on one side. Valid while the joint stays closed.">ⓘ</span></label>
         <div data-show="ecc">
@@ -342,6 +346,7 @@
         <p class="card-note">Half T-stub per bolt: the web pulls with T, the flange edge presses on the support with Q, and the bolt carries B = T + Q. Douty &amp; McGuire elastic formula (Kulak, Fisher &amp; Struik).</p>
         <div class="drawing" id="pry-view"></div>
         <div class="metrics" id="pry-metrics"></div>
+        <div id="pry-ult"></div>
       </div>
 
       <div class="card" id="ecc-card" hidden>
@@ -500,7 +505,13 @@
       <li>The prying force is <b>added to the axial load of the bolt</b> (as in ECSS-E-HB-32-23A), so all checks, including fatigue and NASA-STD-5020, see it. With a bolt pattern it acts on the most loaded bolt.</li>
       <li><b>Flange bending</b> is checked at the web face (|T·b − Q·a|) and at the bolt line (Q·a, net width w − d<sub>h</sub>) against the yield strength of the first clamped part.</li>
     </ul>
-    <p class="about-meta">The formula is elastic and assumes a flange that does not yield. Steel construction codes (e.g. AISC, EN 1993-1-8 T-stub) use plastic models with other limits. Reduce prying with a thicker flange, bolts closer to the web, or stiffeners.</p>
+    <p><b>Plastic T-stub check</b> (ultimate limit state). The elastic formula describes the joint in service; codes for steel structures check the flange and bolt at failure with plastic hinges. Choose <b>EN 1993-1-8</b>, <b>AISC Manual Part 9</b> or both, and a design load factor γ (the service load T per bolt times γ is the design load). Both are evaluated per bolt, as half a T-stub (or one angle leg) with the flange width w:</p>
+    <ul>
+      <li><b>EN 1993-1-8</b> (Table 6.2, method 1, l<sub>eff</sub> = w): m = b − 0.8·r (r = root radius; for a welded web √2·a<sub>w</sub>), n = min(a, 1.25·m), M<sub>pl,Rd</sub> = 0.25·l<sub>eff</sub>·t²·f<sub>y</sub>/γ<sub>M0</sub>, F<sub>t,Rd</sub> = 0.9·f<sub>ub</sub>·A<sub>s</sub>/γ<sub>M2</sub>. Per bolt: mode 1 (flange yields) 2·M<sub>pl</sub>/m, mode 2 (bolt fails with flange yielding) (M<sub>pl</sub> + n·F<sub>t,Rd</sub>)/(m + n), mode 3 (bolt fails) F<sub>t,Rd</sub>. If the bolt is long, L<sub>b</sub> = l<sub>K</sub> + (head + nut)/2 &gt; L<sub>b</sub>* = 8.8·m³·A<sub>s</sub>/(l<sub>eff</sub>·t³), no prying develops and modes 1–2 give M<sub>pl</sub>/m. l<sub>eff</sub> = w is the simple case of a bolt row away from ends and stiffeners: end bolts and bolts near a stiffener have the circular and corner patterns of Table 6.4–6.6.</li>
+      <li><b>AISC Manual Part 9</b> (LRFD, in SI): B = φ·F<sub>nt</sub>·A<sub>b</sub> with F<sub>nt</sub> = 0.75·F<sub>u</sub> of the bolt and φ = 0.75; b' = b − d/2, a' = min(a, 1.25·b) + d/2, ρ = b'/a', δ = 1 − d'/p (p = w). The flange thickness that needs no prying is t<sub>c</sub> = √(4·B·b'/(φ·p·F<sub>u</sub>)) with φ = 0.90; the available tension is B·(t/t<sub>c</sub>)²·(1 + δ·α') with α' = ((t<sub>c</sub>/t)² − 1)/(δ·(1 + ρ)) ≤ 1, and the card also gives the required thickness t<sub>req</sub> and the prying force q at the design load.</li>
+      <li>The plastic checks do not change the service bolt load: VDI 2230 still uses T + Q from the elastic formula. They need a ductile flange with a yield strength (not cast iron).</li>
+    </ul>
+    <p class="about-meta">The formula is elastic and assumes a flange that does not yield. Use the plastic T-stub check for the ultimate limit state. Reduce prying with a thicker flange, bolts closer to the web, or stiffeners.</p>
 
     <h3 id="help-ecc">Eccentric clamping and loading</h3>
     <p>Many joints are not symmetric: the bolt sits off the centre of the contact face (eccentric clamping, offset s<sub>sym</sub>), or the load acts beside the bolt (eccentric loading, offset a), for example on a bracket or a cover flange. The parts then bend as well as compress. Tick <b>Eccentric clamping and loading</b> in section 5 and enter the size of the contact face c<sub>T</sub> × b<sub>T</sub> and the offsets, measured from the centre of the contact face, positive towards the edge U where it would open first.</p>
@@ -565,10 +576,10 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <script src="js/data.js?v=37"></script>
-  <script src="js/calc.js?v=37"></script>
-  <script src="js/presets.js?v=37"></script>
-  <script src="js/drawing.js?v=37"></script>
-  <script src="js/app.js?v=37"></script>
+  <script src="js/data.js?v=38"></script>
+  <script src="js/calc.js?v=38"></script>
+  <script src="js/presets.js?v=38"></script>
+  <script src="js/drawing.js?v=38"></script>
+  <script src="js/app.js?v=38"></script>
 </body>
 </html>

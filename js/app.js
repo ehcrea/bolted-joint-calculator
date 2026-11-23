@@ -212,7 +212,7 @@
       helicoil: state.joint === 'helicoil', insert: state.joint === 'insert',
       'mode-nu': state.mode !== 'torque', 'mode-torque': state.mode === 'torque',
       nasa: !!state.nasa,
-      pry: !!state.pryOn,
+      pry: !!state.pryOn, 'pry-ult': !!state.pryOn && !!state.pryUlt && state.pryUlt !== 'none',
       ecc: !!state.eccOn,
       pat: !!state.patOn, 'no-pat': !state.patOn,
       'pat-circle': state.patType === 'circle' || !state.patType, 'pat-rect': state.patType === 'rect', 'pat-custom': state.patType === 'custom',
@@ -367,6 +367,18 @@
       ['Flange bending, web face', f(p.sigWeb, 0) + ' MPa', (st(p.sigWeb) || '≤ ' + f(p.fAllow, 0) + ' MPa')],
       ['Flange bending, bolt line', f(p.sigBolt, 0) + ' MPa', (st(p.sigBolt) || 'net width ' + f(p.wNet, 1) + ' mm')],
     ]);
+    const U = p.ult, rows = [];
+    if (U && U.en) {
+      const E = U.en;
+      rows.push(['EN 1993-1-8 F<sub>T,Rd</sub> per bolt', f(E.FRd / 1000, 2) + ' kN', E.gov.label + ' · γ·T = ' + f(U.Fed / 1000, 2) + ' kN (' + f(E.util * 100, 0) + ' %)']);
+      rows.push(['Modes', E.modes.map(mo => mo.id + ': ' + f(mo.F / 1000, 1)).join(' · ') + ' kN', E.prying ? 'prying (L<sub>b</sub> = ' + f(E.Lb, 0) + ' ≤ L<sub>b</sub>* = ' + f(E.LbStar, 0) + ' mm)' : 'no prying: L<sub>b</sub> = ' + f(E.Lb, 0) + ' > L<sub>b</sub>* = ' + f(E.LbStar, 0) + ' mm']);
+    }
+    if (U && U.aisc) {
+      const Q = U.aisc;
+      rows.push(['AISC available tension per bolt', f(Q.Tav / 1000, 2) + ' kN', 'γ·T = ' + f(U.Fed / 1000, 2) + ' kN (' + f(Q.util * 100, 0) + ' %) · φr<sub>n</sub> = ' + f(Q.B / 1000, 2) + ' kN']);
+      rows.push(['AISC flange thickness', 't = ' + f(p.t, 1) + ' mm', 't<sub>req</sub> = ' + f(Q.treq, 1) + ' mm · no prying above t<sub>c</sub> = ' + f(Q.tc, 1) + ' mm · q = ' + f(Q.q / 1000, 2) + ' kN']);
+    }
+    $('#pry-ult').innerHTML = rows.length ? '<div class="section-title">Plastic T-stub check (ultimate, per bolt)</div>' + metrics(rows) : '';
   }
   function renderEcc(r) {
     const card = $('#ecc-card'), e = r.ecc;
@@ -531,6 +543,37 @@
       ['σ<sub>web</sub> = 6·|T·b − Q·a| / (w·t²)', '6·' + N(PY.Mweb / 1000, 1) + ' N·m / (' + N(PY.w, 1) + '·' + N(PY.t, 1) + '²)', N(PY.sigWeb, 0) + ' MPa'],
       ['σ<sub>bolt</sub> = 6·Q·a / ((w − d<sub>h</sub>)·t²)', '6·' + N(PY.Mbolt / 1000, 1) + ' N·m / (' + N(PY.wNet, 1) + '·' + N(PY.t, 1) + '²)', N(PY.sigBolt, 0) + ' MPa'],
     ], 'Flange checked against ' + (PY.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + N(PY.fAllow, 0) + ' MPa of ' + PY.mat.label + '. A<sub>b</sub> is the stress area.');
+    const UL = PY && PY.ult;
+    if (UL && UL.en) {
+      const E = UL.en;
+      step('T-stub', 'Plastic T-stub, EN 1993-1-8 Table 6.2 (per bolt = half T-stub)', [
+        ['m = b − 0.8·r, n = min(a, 1.25·m)', N(PY.b, 1) + ' − 0.8·' + N(E.r, 1) + '; min(' + N(PY.a, 1) + ', ' + N(1.25 * E.m, 1) + ')', 'm = ' + N(E.m, 1) + ', n = ' + N(E.n, 1) + ' mm'],
+        ['M<sub>pl,Rd</sub> = 0.25·l<sub>eff</sub>·t²·f<sub>y</sub>/γ<sub>M0</sub>, l<sub>eff</sub> = w', '0.25·' + N(PY.w, 1) + '·' + N(PY.t, 1) + '²·' + N(PY.mat.Rp, 0), N(E.Mpl / 1000, 1) + ' N·m'],
+        ['F<sub>t,Rd</sub> = 0.9·f<sub>ub</sub>·A<sub>s</sub>/γ<sub>M2</sub>', '0.9·' + N(r.bc.Rm, 0) + '·' + N(g.As, 1) + '/1.25', kN(E.FtRd)],
+        ['L<sub>b</sub>* = 8.8·m³·A<sub>s</sub>/(l<sub>eff</sub>·t³)', 'L<sub>b</sub> = l<sub>K</sub> + (k + m<sub>nut</sub>)/2 = ' + N(E.Lb, 1) + ' mm', N(E.LbStar, 1) + ' mm → ' + (E.prying ? 'prying' : 'no prying')],
+      ].concat(E.prying ? [
+        ['Mode 1: F = 2·M<sub>pl</sub>/m', '', kN(E.modes[0].F)],
+        ['Mode 2: F = (M<sub>pl</sub> + n·F<sub>t,Rd</sub>)/(m + n)', '', kN(E.modes[1].F)],
+        ['Mode 3: F = F<sub>t,Rd</sub>', '', kN(E.modes[2].F)],
+      ] : [
+        ['Modes 1–2 (no prying): F = M<sub>pl</sub>/m', '', kN(E.modes[0].F)],
+        ['Mode 3: F = F<sub>t,Rd</sub>', '', kN(E.modes[1].F)],
+      ]).concat([['γ·T ≤ F<sub>T,Rd</sub>', N(UL.gam, 2) + '·' + kN(PY.T) + ' = ' + kN(UL.Fed), '<b>' + kN(E.FRd) + '</b> (' + E.gov.label.replace(/:.*/, '') + ')']]),
+      'The per-bolt formulas are those of the whole T-stub divided by its two bolts. l<sub>eff</sub> = w is the simple case of a bolt row away from ends and stiffeners; check the circular and corner patterns of EN 1993-1-8 Table 6.4–6.6 for end bolts.');
+    }
+    if (UL && UL.aisc) {
+      const Q = UL.aisc;
+      step('T-stub', 'Prying, AISC Manual Part 9 (LRFD, per bolt)', [
+        ['φr<sub>n</sub> = B = 0.75·0.75·F<sub>ub</sub>·A<sub>b</sub>', '0.75·0.75·' + N(r.bc.Rm, 0) + '·' + N(Q.Ab, 1), kN(Q.B)],
+        ["b' = b − d/2, a' = min(a, 1.25·b) + d/2, ρ = b'/a'", N(Q.bp, 1) + ', ' + N(Q.ap, 1) + ' mm', N(Q.rho, 3)],
+        ["δ = 1 − d'/p, p = w", '1 − ' + N(r.dh, 1) + '/' + N(PY.w, 1), N(Q.delta, 3)],
+        ["t<sub>c</sub> = √(4·B·b'/(φ·p·F<sub>u</sub>)), φ = 0.90", 'F<sub>u</sub> = ' + N(PY.mat.Rm, 0) + ' MPa', N(Q.tc, 2) + ' mm'],
+        ["α' = ((t<sub>c</sub>/t)² − 1)/(δ·(1 + ρ))", '', N(Q.al, 3) + (Q.al < 0 ? ' (t ≥ t<sub>c</sub>: no prying)' : '')],
+        ["T<sub>avail</sub> = B·(t/t<sub>c</sub>)²·(1 + δ·α'), α' ≤ 1", '', '<b>' + kN(Q.Tav) + '</b>'],
+        ["t<sub>req</sub> = √(4·T<sub>u</sub>·b'/(φ·p·F<sub>u</sub>·(1 + δ·α')))", 'T<sub>u</sub> = γ·T = ' + kN(UL.Fed), N(Q.treq, 2) + ' mm'],
+        ['q = B·δ·α·ρ·(t/t<sub>c</sub>)²', '', kN(Q.q)],
+      ], 'SI form of the AISC Manual equations with F<sub>nt</sub> = 0.75·F<sub>u</sub> of the bolt (AISC 360 Table J3.2) and the nominal bolt area A<sub>b</sub>.');
+    }
     const EC = r.ecc;
     if (EC) step('Eccentric', 'Eccentric clamping and loading (VDI 2230 Part 1)', [
       ['A<sub>D</sub> = b<sub>T</sub>·c<sub>T</sub> − π/4·d<sub>h</sub>²', N(EC.bT, 1) + '·' + N(EC.cT, 1) + ' − π/4·' + N(r.dh, 1) + '²', N(EC.AD, 0) + ' mm²'],

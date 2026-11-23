@@ -930,10 +930,60 @@
       ck('Pattern', 'Flange bending (flexible flange): σ = M<sub>max</sub> / W', fx.sig, '≤ ' + (fx.brittle ? 'R<sub>m</sub> ' : 'R<sub>p</sub> ') + fmtN(fx.fAllow, 0) + ' MPa', fx.sig <= fx.fAllow, false, 'MPa', fx.sig > 0 ? fx.fAllow / fx.sig : undefined);
     }
     if (ecc && isFinite(FKA)) ck('R10', 'No one-sided opening: F<sub>KR,min</sub> ≥ F<sub>KA</sub> (eccentric)' + (inp.eccOpen ? ', opening allowed' : ''), FKRlin / 1000, '≥ ' + fmtN(FKA / 1000, 2) + ' kN', FKRlin >= FKA, !!inp.eccOpen, 'kN', FKA > 0 ? FKRlin / FKA : undefined);
+    // ---- plastic T-stub models (ultimate limit state, per bolt = half a T-stub or one angle leg) ----
+    if (pry && (inp.pryUlt === 'en' || inp.pryUlt === 'aisc' || inp.pryUlt === 'both')) {
+      const gam = +inp.pryGamma > 0 ? +inp.pryGamma : 1.5;
+      const T = pry.T, Fed = gam * T, fy = pry.mat.Rp, fu = pry.mat.Rm, t = pry.t, w = pry.w;
+      const ult = pry.ult = { gam, Fed };
+      if (pry.brittle || !(fy > 0) || !(fu > 0)) add('warn', 'Plastic T-stub models need a ductile flange with a yield strength; ' + pry.mat.label + ' has none, so they are skipped.');
+      else {
+        if (inp.pryUlt === 'en' || inp.pryUlt === 'both') {
+          // EN 1993-1-8 Table 6.2, method 1, l_eff,1 = l_eff,2 = w; m = b − 0.8·r (r = fillet radius or 0.8·√2·a_w for a weld)
+          const gM0 = 1.0, gM2 = 1.25, k2 = 0.9;
+          const r = Math.max(0, +inp.pryR || 0), m = Math.max(1e-6, pry.b - 0.8 * r), n = Math.min(pry.a, 1.25 * m);
+          const Mpl = 0.25 * w * t * t * fy / gM0;
+          const FtRd = k2 * bc.Rm * g.As / gM2;
+          const kHead = inp.head === 'shcs' ? d : 0.65 * d;
+          const kNut = inp.joint === 'nut' ? 0.84 * d : Math.max(+inp.engage || 0, d);
+          const Lb = lK + (kHead + kNut) / 2;
+          const LbStar = 8.8 * Math.pow(m, 3) * g.As / (w * Math.pow(t, 3));
+          const prying = Lb <= LbStar;
+          const modes = prying
+            ? [{ id: '1', label: 'Mode 1: flange yields completely', F: 2 * Mpl / m }, { id: '2', label: 'Mode 2: bolt fails with flange yielding', F: (Mpl + n * FtRd) / (m + n) }, { id: '3', label: 'Mode 3: bolt fails', F: FtRd }]
+            : [{ id: '1-2', label: 'Modes 1–2 without prying: flange yields', F: Mpl / m }, { id: '3', label: 'Mode 3: bolt fails', F: FtRd }];
+          const gov = modes.reduce((a, b) => (b.F < a.F ? b : a));
+          ult.en = { m, n, r, Mpl, FtRd, Lb, LbStar, prying, modes, gov, FRd: gov.F, util: Fed / gov.F };
+          if (n < pry.a && pry.a > 1.25 * m) add('info', 'T-stub (EN 1993-1-8): the edge distance is limited to n = 1.25·m = ' + fmtN(n, 1) + ' mm.');
+        }
+        if (inp.pryUlt === 'aisc' || inp.pryUlt === 'both') {
+          // AISC Manual Part 9 (16th ed., LRFD): prying with the flange checked against F_u
+          const phi = 0.75, phiF = 0.9, db = d;
+          const Ab = PI / 4 * db * db, B = phi * 0.75 * bc.Rm * Ab;     // φ·F_nt·A_b, F_nt = 0.75·F_u (AISC 360 Table J3.2)
+          const bp = pry.b - db / 2, ap = Math.min(pry.a, 1.25 * pry.b) + db / 2, rho = bp / ap, delta = 1 - dh / w;
+          if (bp <= 0 || delta <= 0) add('warn', 'AISC prying: b must exceed d/2 and the flange width per bolt must exceed the hole; check is skipped.');
+          else {
+            const tc = Math.sqrt(4 * B * bp / (phiF * w * fu));
+            const al = ((tc / t) * (tc / t) - 1) / (delta * (1 + rho));
+            const Tav = al < 0 ? B : B * Math.pow(t / tc, 2) * (1 + delta * Math.min(al, 1));
+            const alU = t >= tc ? 0 : Math.min(1, Math.max(0, ((Fed / B) * (tc / t) * (tc / t) - 1) / delta));
+            const q = t >= tc ? 0 : B * delta * alU * rho * Math.pow(t / tc, 2);
+            const beta = (B / Fed - 1) / rho;
+            const alP = beta >= 1 ? 1 : Math.max(0, Math.min(1, beta / (delta * (1 - beta))));
+            const treq = Math.sqrt(4 * Fed * bp / (phiF * w * fu * (1 + delta * alP)));
+            ult.aisc = { B, Ab, bp, ap, rho, delta, tc, al, Tav, q, treq, util: Fed / Tav };
+          }
+        }
+      }
+    }
     if (pry) {
       const lim = (pry.brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' = ' + fmtN(pry.fAllow, 0) + ' MPa';
       ck('Pry', 'Flange bending at the web face (prying)', pry.sigWeb, '≤ ' + lim, pry.sigWeb <= pry.fAllow, false, 'MPa', pry.fAllow / pry.sigWeb);
       if (pry.Q > 0) ck('Pry', 'Flange bending at the bolt line, net section (prying)', pry.sigBolt, '≤ ' + lim, pry.sigBolt <= pry.fAllow, false, 'MPa', pry.fAllow / pry.sigBolt);
+      const U = pry.ult;
+      if (U && U.en) ck('T-stub', 'EN 1993-1-8 T-stub (' + U.en.gov.label.replace(/:.*/, '') + '): γ·T ≤ F<sub>T,Rd</sub> per bolt', U.Fed / 1000, '≤ ' + fmtN(U.en.FRd / 1000, 2) + ' kN', U.Fed <= U.en.FRd, false, 'kN', U.en.FRd / U.Fed);
+      if (U && U.aisc) ck('T-stub', 'AISC prying: γ·T ≤ available tension per bolt (t = ' + fmtN(pry.t, 1) + ' mm, t<sub>req</sub> = ' + fmtN(U.aisc.treq, 1) + ' mm)', U.Fed / 1000, '≤ ' + fmtN(U.aisc.Tav / 1000, 2) + ' kN', U.Fed <= U.aisc.Tav, false, 'kN', U.aisc.Tav / U.Fed);
+      if (U && U.en && U.Fed > U.en.FRd) add('error', 'T-stub (EN 1993-1-8): the design load γ·T = ' + fmtN(U.Fed / 1000, 2) + ' kN per bolt exceeds the resistance ' + fmtN(U.en.FRd / 1000, 2) + ' kN (' + U.en.gov.label.toLowerCase() + '). ' + (/flange/.test(U.en.gov.label) ? 'Use a thicker flange or move the bolt closer to the web.' : 'Use a bigger or stronger bolt.'));
+      if (U && U.aisc && U.Fed > U.aisc.Tav) add('error', 'AISC prying: the required tension ' + fmtN(U.Fed / 1000, 2) + ' kN per bolt exceeds the available ' + fmtN(U.aisc.Tav / 1000, 2) + ' kN; the flange needs t ≥ ' + fmtN(U.aisc.treq, 1) + ' mm' + (U.aisc.treq > U.aisc.tc ? ' (more than t<sub>c</sub>: use a stronger bolt)' : '') + '.');
     }
     ck('R13', 'Thread stripping: weakest thread ≥ bolt breaking load', weakest.F / 1000, '≥ ' + fmtN(Fbreak / 1000, 1) + ' kN', weakest.F >= Fbreak, weakest.F >= FSmax, 'kN', weakest.F / Fbreak);
 

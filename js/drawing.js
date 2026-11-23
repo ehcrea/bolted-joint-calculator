@@ -526,33 +526,78 @@
     const e = r.ecc;
     if (!e) return '';
     const id = 'ec' + (++uid);
-    const VW = 460, VH = 330, cx = 230;
-    const sc = 340 / Math.max(e.cT, 2 * Math.abs(e.a) + 10, 1);
-    const X = mm => cx + mm * sc;
-    const yTop = 110, h = Math.min(70, Math.max(30, r.lK * sc * 0.6)), yI = yTop + h;
-    const out = [`<svg viewBox="0 0 ${VW} ${VH}" role="img" aria-label="Eccentric clamping and loading">${hatchDefs(id)}`];
-    // upper part and lower part, interface line
-    out.push(`<rect x="${r1(X(-e.cT / 2))}" y="${r1(yTop)}" width="${r1(e.cT * sc)}" height="${r1(h)}" class="layer m-steel"/>`);
-    out.push(`<rect x="${r1(X(-e.cT / 2))}" y="${r1(yI)}" width="${r1(e.cT * sc)}" height="40" class="layer m-aluminium"/><rect x="${r1(X(-e.cT / 2))}" y="${r1(yI)}" width="${r1(e.cT * sc)}" height="40" fill="url(#${id}-h45)" class="hatch-fill"/>`);
-    // symmetric axis
-    out.push(`<line x1="${cx}" y1="${yTop - 40}" x2="${cx}" y2="${yI + 60}" class="pat-axis"/><text x="${cx + 4}" y="${yI + 72}" class="pat-axis-text">axis of the symmetric body</text>`);
-    // bolt
-    const xb = X(e.ssym), bw = Math.max(6, r.g.d * sc), hk = Math.max(6, 0.6 * r.g.d * sc);
-    out.push(`<rect x="${r1(xb - bw / 2)}" y="${r1(yTop - hk)}" width="${r1(bw)}" height="${r1(h + hk + 30)}" class="bolt"/><rect x="${r1(xb - bw * 0.85)}" y="${r1(yTop - hk)}" width="${r1(bw * 1.7)}" height="${r1(hk)}" class="bolt"/>`);
-    // load line F_A
-    const xa = X(e.a), yA = yTop - (Math.abs(xa - xb) < bw * 0.85 + 2 ? hk : 0) - 3;
-    out.push(`<line x1="${r1(xa)}" y1="${r1(yA)}" x2="${r1(xa)}" y2="${r1(yA - 36)}" class="force" marker-end="url(#${id}-arrF)"/><text x="${r1(xa + 6)}" y="${r1(yA - 20)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">A</tspan></text>`);
-    // opening point U
-    const xu = X(e.u);
-    out.push(`<circle cx="${r1(xu)}" cy="${r1(yI)}" r="4" class="pat-bolt crit" style="fill-opacity:.15"/><text x="${r1(xu)}" y="${r1(yI - 8)}" text-anchor="middle" class="lbl">U</text>`);
-    // dimensions from the axis
-    const dimRow = (y, x, label) => Math.abs(x - cx) > 2 ? dimH(y, Math.min(cx, x), Math.max(cx, x), label, id, true) : '';
-    out.push(dimRow(yA - 50, xa, 'a = ' + f(e.a, 1)));
-    out.push(dimRow(yI + 96, xb, 's<tspan baseline-shift="sub" font-size="9">sym</tspan> = ' + f(e.ssym, 1)));
-    out.push(dimRow(yI + 124, xu, 'u = ' + f(e.u, 1)));
-    out.push(`<text x="${VW - 6}" y="${VH - 6}" text-anchor="end" class="lbl">interface c<tspan baseline-shift="sub" font-size="9">T</tspan> × b<tspan baseline-shift="sub" font-size="9">T</tspan> = ${f(e.cT, 0)} × ${f(e.bT, 0)} mm</text>`);
+    const VW = 460, d = r.g.d;
+    // x in mm from the axis of the symmetric body; the interface runs from V (u − c_T) to U (u)
+    const xV = e.u - e.cT, xU = e.u;
+    const eo = e.open && e.open.atMin, aEff = e.open && isFinite(e.open.aEff) ? e.open.aEff : e.a;
+    const lo = Math.min(xV, e.a, e.ssym - d), hi = Math.max(xU, e.a, e.ssym + d);
+    const sc = 330 / Math.max(hi - lo, 1);
+    const X = mm => 65 + (mm - lo) * sc;
+    const cx = X(0);
+    const yTop = 104, h = Math.min(64, Math.max(30, r.lK * sc * 0.5)), yI = yTop + h, hL = 38, yBot = yI + hL;
+    const out = [`<svg viewBox="0 0 ${VW} VHX" role="img" aria-label="Eccentric clamping and loading">${hatchDefs(id)}`];
+    const opened = eo && eo.open;
+    // parts: upper part (tilted a little when opened), lower part hatched
+    const gapW = opened ? Math.min(10, 4 + 6 * (1 - eo.x / e.cT)) : 0;          // exaggerated gap at U
+    const xC = opened ? X(xV + eo.x) : X(xU);
+    const up = opened
+      ? `<path d="M${r1(X(xV))},${r1(yTop)} L${r1(X(xU))},${r1(yTop - gapW)} L${r1(X(xU))},${r1(yI - gapW)} L${r1(xC)},${r1(yI)} L${r1(X(xV))},${r1(yI)} Z" class="layer m-steel"/>`
+      : `<rect x="${r1(X(xV))}" y="${yTop}" width="${r1(e.cT * sc)}" height="${r1(h)}" class="layer m-steel"/>`;
+    out.push(up);
+    out.push(`<rect x="${r1(X(xV))}" y="${r1(yI)}" width="${r1(e.cT * sc)}" height="${hL}" class="layer m-aluminium"/><rect x="${r1(X(xV))}" y="${r1(yI)}" width="${r1(e.cT * sc)}" height="${hL}" fill="url(#${id}-h45)" class="hatch-fill"/>`);
+    if (opened) out.push(`<path d="M${r1(xC)},${r1(yI)} L${r1(X(xU))},${r1(yI - gapW)} L${r1(X(xU))},${r1(yI)} Z" fill="var(--err)" fill-opacity=".25" stroke="var(--err)" stroke-width="1"/>`);
+    // bolt with head and nut (or screwed into the lower part)
+    const xb = X(e.ssym), bw = Math.max(6, d * sc), hk = Math.max(6, 0.6 * d * sc), hw = bw * 1.7;
+    const nutJ = r.esv ? false : true;
+    out.push(`<rect x="${r1(xb - bw / 2)}" y="${r1(yTop)}" width="${r1(bw)}" height="${r1(h + hL * (nutJ ? 1 : 0.7))}" class="bolt"/>`);
+    out.push(`<rect x="${r1(xb - hw / 2)}" y="${r1(yTop - hk)}" width="${r1(hw)}" height="${r1(hk)}" class="bolt"/>`);
+    if (nutJ) out.push(`<rect x="${r1(xb - hw / 2)}" y="${r1(yBot)}" width="${r1(hw)}" height="${r1(hk)}" class="bolt"/>`);
+    // axis of the symmetric body
+    const yAx = yTop - hk - 26;
+    out.push(`<line x1="${r1(cx)}" y1="${yAx}" x2="${r1(cx)}" y2="${yBot + 20}" class="pat-axis"/>`);
+    // load line with F_A pulling the parts apart (up on the upper part, down on the lower part)
+    const xa = X(e.a), overHead = Math.abs(xa - xb) < hw / 2 + 3;
+    const yAu = (overHead ? yTop - hk : yTop - (opened && e.a > xV ? gapW * (e.a - xV) / e.cT : 0)) - 2;
+    const yAd = yBot + (overHead && nutJ ? hk : 0) + 2;
+    out.push(`<line x1="${r1(xa)}" y1="${r1(yAu)}" x2="${r1(xa)}" y2="${r1(yAd)}" stroke="var(--hot)" stroke-width="1" stroke-dasharray="8 3 2 3" stroke-opacity=".8"/>`);
+    out.push(`<line x1="${r1(xa)}" y1="${r1(yAu)}" x2="${r1(xa)}" y2="${r1(yAu - 34)}" class="force" marker-end="url(#${id}-arrF)"/><text x="${r1(xa + 6)}" y="${r1(yAu - 20)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">A</tspan></text>`);
+    out.push(`<line x1="${r1(xa)}" y1="${r1(yAd)}" x2="${r1(xa)}" y2="${r1(yAd + 26)}" class="force" marker-end="url(#${id}-arrF)"/><text x="${r1(xa + 6)}" y="${r1(yAd + 20)}" class="force-text">F<tspan baseline-shift="sub" font-size="9">A</tspan></text>`);
+    // bending moment M_B (opening sense, towards U)
+    if (e.MB) {
+      const mx = X(xU) + 16, my = yTop + h / 2, R = 13, s = e.MB > 0 ? 1 : -1;
+      out.push(`<path d="M${r1(mx - 4)},${r1(my + s * R)} A${R},${R} 0 1 ${s > 0 ? 0 : 1} ${r1(mx - 4)},${r1(my - s * R)}" fill="none" class="force" marker-end="url(#${id}-arrF)"/><text x="${r1(mx + R + 2)}" y="${r1(my + 4)}" class="force-text">M<tspan baseline-shift="sub" font-size="9">B</tspan></text>`);
+    }
+    // edges U (opens first) and V (tipping edge)
+    out.push(`<circle cx="${r1(X(xU))}" cy="${r1(yI)}" r="3.5" class="pat-bolt crit" style="fill-opacity:.15"/><text x="${r1(X(xU) + 6)}" y="${r1(yI + 14)}" class="lbl">U</text>`);
+    out.push(`<circle cx="${r1(X(xV))}" cy="${r1(yI)}" r="3" fill="var(--text-2)"/><text x="${r1(X(xV) - 6)}" y="${r1(yI + 14)}" text-anchor="end" class="lbl">V</text>`);
+    // dimensions from the axis, one row each, with extension lines
+    let y = yBot + (nutJ ? hk : 0) + 44;
+    const dims = [];
+    const dimRow = (x, from, label) => {
+      if (Math.abs(x - cx) < 1) return;
+      const x1 = Math.min(cx, x), x2 = Math.max(cx, x), wide = x2 - x1 > 70;
+      dims.push(`<line x1="${r1(x)}" y1="${r1(from)}" x2="${r1(x)}" y2="${r1(y + 4)}" class="ext"/>`);
+      dims.push(`<line x1="${r1(x1)}" y1="${y}" x2="${r1(x2)}" y2="${y}" class="dim" marker-start="url(#${id}-arr)" marker-end="url(#${id}-arr)"/>`);
+      dims.push(wide ? `<text x="${r1((x1 + x2) / 2)}" y="${y - 5}" text-anchor="middle" class="dim-text">${label}</text>`
+        : `<text x="${r1(x2 + 6)}" y="${y + 4}" class="dim-text">${label}</text>`);
+      y += 24;
+    };
+    dimRow(xb, yBot + (nutJ ? hk : 0) + 2, 's<tspan baseline-shift="sub" font-size="9">sym</tspan> = ' + f(e.ssym, 1));
+    dimRow(xa, yAd + 28, 'a = ' + f(e.a, 1));
+    dimRow(X(xU), yBot + 2, 'u = ' + f(e.u, 1));
+    // c_T from V to U
+    dims.push(`<line x1="${r1(X(xV))}" y1="${yBot + 2}" x2="${r1(X(xV))}" y2="${y + 4}" class="ext"/><line x1="${r1(X(xU))}" y1="${y - 20}" x2="${r1(X(xU))}" y2="${y + 4}" class="ext"/>`);
+    dims.push(`<line x1="${r1(X(xV))}" y1="${y}" x2="${r1(X(xU))}" y2="${y}" class="dim" marker-start="url(#${id}-arr)" marker-end="url(#${id}-arr)"/><text x="${r1((X(xV) + X(xU)) / 2)}" y="${y - 5}" text-anchor="middle" class="dim-text">c<tspan baseline-shift="sub" font-size="9">T</tspan> = ${f(e.cT, 0)} (b<tspan baseline-shift="sub" font-size="9">T</tspan> = ${f(e.bT, 0)})</text>`);
+    // extension lines from the axis
+    dims.unshift(`<line x1="${r1(cx)}" y1="${yBot + 20}" x2="${r1(cx)}" y2="${y - 20}" class="ext"/>`);
+    out.push(dims.join(''));
+    const axR = e.a < 0;   // label on the side away from the load arrow
+    out.push(`<text x="${r1(cx + (axR ? 5 : -5))}" y="${yAx + 4}" text-anchor="${axR ? 'start' : 'end'}" class="pat-axis-text">axis of the symmetric body</text>`);
+    const VH = y + (opened ? 42 : 26);
+    out.push(`<text x="6" y="${y + 20}" class="lbl">distances from the axis, + towards U (the edge that opens first)</text>`);
+    if (opened) out.push(`<text x="6" y="${y + 36}" class="lbl" style="fill:var(--err)">opened at F<tspan baseline-shift="sub" font-size="9">A,max</tspan>: contact ${f(eo.x, 0)} of ${f(e.cT, 0)} mm from V, gap at U (exaggerated)</text>`);
     out.push('</svg>');
-    return out.join('');
+    return out.join('').replace('VHX', VH);
   }
 
   // ---------------- opened eccentric joint: bolt force against the axial load ----------------

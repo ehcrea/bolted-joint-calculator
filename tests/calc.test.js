@@ -355,6 +355,34 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   ok(si.cls === '12.9' && si.thread === 'M10', 'size input sets the class');
 }
 
+// ---- plastic T-stub models ----
+{
+  const ang = P.PRESETS.find(p => p.id === 'pry-angle').s;
+  const r = C.calculate(stateFrom(Object.assign({}, ang, { pryUlt: 'both', pryGamma: 1.5 }))), U = r.pry.ult, E = U.en, A = U.aisc;
+  near(U.Fed, 12000, 1e-9, 'design load γ·T');
+  near(E.Mpl, 0.25 * 60 * 100 * 235, 1e-9, 'M_pl,Rd = 0.25·l_eff·t²·f_y');
+  near(E.modes[0].F, 2 * E.Mpl / 25, 1e-9, 'mode 1 per bolt = 2·M_pl/m');
+  near(E.modes[1].F, (E.Mpl + 30 * E.FtRd) / 55, 1e-9, 'mode 2 per bolt = (M_pl + n·F_t,Rd)/(m + n)');
+  near(E.FtRd, 0.9 * 800 * r.g.As / 1.25, 1e-9, 'F_t,Rd = 0.9·f_ub·A_s/γM2');
+  near(E.LbStar, 8.8 * Math.pow(25, 3) * r.g.As / (60 * 1000), 1e-9, 'L_b* = 8.8·m³·A_s/(l_eff·t³)');
+  ok(E.prying && E.gov.id === '2' && Math.abs(E.FRd - 24628) < 5, 'angle: mode 2 governs, 24.6 kN per bolt');
+  near(A.B, 0.75 * 0.75 * 800 * Math.PI * 25, 1e-9, 'AISC: B = φ·0.75·F_u·A_b');
+  ok(Math.abs(A.tc - 12.06) < 0.01 && Math.abs(A.Tav - 31330) < 20 && Math.abs(A.treq - 5.21) < 0.01 && A.q === 0, 'AISC: t_c, available tension, t_req, no prying at γ·T');
+  ok(r.checks.filter(c => c.id === 'T-stub').length === 2 && r.status !== 'error', 'two T-stub checks, both pass');
+  const thin = C.calculate(stateFrom(Object.assign({}, ang, { pryUlt: 'aisc', pryT: 6 }))).pry.ult.aisc;
+  ok(thin.q > 0 && thin.Tav < A.Tav, 'AISC: a thin flange pries (q > 0) and carries less');
+  const over = C.calculate(stateFrom(Object.assign({}, ang, { pryUlt: 'en', FAmax: 20 })));
+  ok(over.issues.some(i => i.level === 'error' && /T-stub \(EN 1993-1-8\)/.test(i.text)), 'EN T-stub overloaded: error');
+  const ts = P.PRESETS.find(p => p.id === 'pry-tstub').s;
+  const thick = C.calculate(stateFrom(Object.assign({}, ts, { plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 20 }] }))).pry.ult.en;
+  ok(!thick.prying && thick.modes.length === 2 && Math.abs(thick.modes[0].F - thick.Mpl / thick.m) < 1e-6, 'long bolt (L_b > L_b*): no prying, modes 1–2 = M_pl/m');
+  const ex = C.calculate(stateFrom(ts));
+  ok(ex.status !== 'error' && ex.pry.ult.en.m === 30 - 0.8 * 12, 'T-stub example passes, m = b − 0.8·r');
+  ok(!C.calculate(stateFrom(ang)).pry.ult, 'no plastic check unless chosen');
+  const gj = C.calculate(stateFrom(Object.assign({}, ang, { pryUlt: 'both', plates: [{ mat: 'GJL250', t: 10 }, { mat: 'S235', t: 15 }] })));
+  ok(!gj.pry.ult.en && gj.issues.some(i => /ductile flange/.test(i.text)), 'brittle flange: plastic models skipped with a warning');
+}
+
 // ---- opened eccentric joint ----
 {
   const ex = P.PRESETS.find(p => p.id === 'ecc-bracket').s;
