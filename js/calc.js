@@ -239,6 +239,201 @@
     return { cols, nodes, line, Mmax, xM };
   }
 
+  // ---- plate flange (2-D) on elastic bolt supports, optionally on a flexible base ----
+  // Kirchhoff plate, ACM rectangles (12 dof: w, ∂w/∂x, ∂w/∂y per corner) on a uniform grid over the flange outline.
+  // Bolts are point springs k_i (VDI joint stiffness of the closed joint) between the flange and a rigid base, or
+  // between the flange and a base plate of the same outline that is simply supported along its edge or bedded on an
+  // elastic foundation (modulus k_s). Loads enter through a stiff hub / web footprint (3× thickness) around (x_F, y_F).
+  const ACM = (() => {
+    // monomials of the ACM element and their derivatives, in local coordinates
+    const P = (x, y) => [1, x, y, x * x, x * y, y * y, x * x * x, x * x * y, x * y * y, y * y * y, x * x * x * y, x * y * y * y];
+    const Px = (x, y) => [0, 1, 0, 2 * x, y, 0, 3 * x * x, 2 * x * y, y * y, 0, 3 * x * x * y, y * y * y];
+    const Py = (x, y) => [0, 0, 1, 0, x, 2 * y, 0, x * x, 2 * x * y, 3 * y * y, x * x * x, 3 * x * y * y];
+    const Pxx = (x, y) => [0, 0, 0, 2, 0, 0, 6 * x, 2 * y, 0, 0, 6 * x * y, 0];
+    const Pyy = (x, y) => [0, 0, 0, 0, 0, 2, 0, 0, 2 * x, 6 * y, 0, 6 * x * y];
+    const Pxy = (x, y) => [0, 0, 0, 0, 1, 0, 0, 2 * x, 2 * y, 0, 3 * x * x, 3 * y * y];
+    const inv = A => {
+      const n = A.length, M = A.map((r, i) => r.concat(Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))));
+      for (let c = 0; c < n; c++) {
+        let p = c;
+        for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+        [M[c], M[p]] = [M[p], M[c]];
+        const d = M[c][c];
+        for (let k = 0; k < 2 * n; k++) M[c][k] /= d;
+        for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c]; if (f) for (let k = 0; k < 2 * n; k++) M[r][k] -= f * M[c][k]; }
+      }
+      return M.map(r => r.slice(n));
+    };
+    const GP = { 3: [[-Math.sqrt(0.6), 5 / 9], [0, 8 / 9], [Math.sqrt(0.6), 5 / 9]],
+      5: [[-0.9061798459386640, 0.2369268850561891], [-0.5384693101056831, 0.4786286704993665], [0, 0.5688888888888889], [0.5384693101056831, 0.4786286704993665], [0.9061798459386640, 0.2369268850561891]] };
+    // element matrices for half sizes a (x) and b (y); corners in the order (−a,−b), (a,−b), (a,b), (−a,b)
+    function element(a, b, nu) {
+      const cs = [[-a, -b], [a, -b], [a, b], [-a, b]];
+      const C = [];
+      cs.forEach(([x, y]) => { C.push(P(x, y)); C.push(Px(x, y)); C.push(Py(x, y)); });
+      const Ci = inv(C);
+      const mul = (row) => Ci[0].map((_, j) => row.reduce((s, v, i) => s + v * Ci[i][j], 0));   // row · C⁻¹
+      const K = Array.from({ length: 12 }, () => new Array(12).fill(0)), Kf = Array.from({ length: 12 }, () => new Array(12).fill(0));
+      GP[3].forEach(([gx, wx]) => GP[3].forEach(([gy, wy]) => {
+        const x = gx * a, y = gy * b, w = wx * wy * a * b;
+        const bx = mul(Pxx(x, y)), by = mul(Pyy(x, y)), bxy = mul(Pxy(x, y));
+        for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++)
+          K[i][j] += w * (bx[i] * bx[j] + by[i] * by[j] + nu * (bx[i] * by[j] + by[i] * bx[j]) + 2 * (1 - nu) * bxy[i] * bxy[j]);
+      }));
+      GP[5].forEach(([gx, wx]) => GP[5].forEach(([gy, wy]) => {
+        const N = mul(P(gx * a, gy * b)), w = wx * wy * a * b;
+        for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) Kf[i][j] += w * N[i] * N[j];
+      }));
+      return { K, Kf, N: (x, y) => mul(P(x, y)), curv: (x, y) => [mul(Pxx(x, y)), mul(Pyy(x, y)), mul(Pxy(x, y))] };
+    }
+    return { element };
+  })();
+
+  // symmetric banded Cholesky (upper band storage: B[i][k] = A[i][i + k], k ≤ bw)
+  function bandSolve(B, F, bw) {
+    const n = F.length;
+    for (let j = 0; j < n; j++) {
+      const Bj = B[j];
+      for (let i = j; i <= Math.min(n - 1, j + bw); i++) {
+        let s = Bj[i - j];
+        for (let k = Math.max(0, i - bw); k < j; k++) { const Bk = B[k]; s -= Bk[j - k] * Bk[i - k]; }
+        if (i === j) { if (!(s > 0)) return null; Bj[0] = Math.sqrt(s); } else Bj[i - j] = s / Bj[0];
+      }
+    }
+    const y = F.slice();
+    for (let i = 0; i < n; i++) { let s = y[i]; for (let k = Math.max(0, i - bw); k < i; k++) s -= B[k][i - k] * y[k]; y[i] = s / B[i][0]; }
+    for (let i = n - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k <= Math.min(n - 1, i + bw); k++) s -= B[i][k - i] * y[k]; y[i] = s / B[i][0]; }
+    return y;
+  }
+
+  function flexPlate(pts, opt) {
+    const { outline, hub, t, E, nu, kb, Fz, Mx0, My0, xF, yF, base, exclR } = opt;
+    const inside = (o, x, y) => (o.type === 'disc' ? Math.hypot(x - o.x0, y - o.y0) <= o.R : Math.abs(x - o.x0) <= o.hx && Math.abs(y - o.y0) <= o.hy);
+    const bb = outline.type === 'disc' ? { x0: outline.x0 - outline.R, x1: outline.x0 + outline.R, y0: outline.y0 - outline.R, y1: outline.y0 + outline.R }
+      : { x0: outline.x0 - outline.hx, x1: outline.x0 + outline.hx, y0: outline.y0 - outline.hy, y1: outline.y0 + outline.hy };
+    const Lx = bb.x1 - bb.x0, Ly = bb.y1 - bb.y0;
+    if (!(Lx > 0 && Ly > 0 && t > 0 && E > 0)) return null;
+    // the bolts must span an area, or the flange (held only by the bolts) could rotate about their line
+    const span = Math.max(Lx, Ly);
+    const area = pts.reduce((m, p, i) => Math.max(m, ...pts.slice(i + 1).flatMap((q, j) => pts.slice(i + j + 2).map(s => Math.abs((q.x - p.x) * (s.y - p.y) - (q.y - p.y) * (s.x - p.x))))), 0);
+    if (pts.length < 3 || area < 1e-3 * span * span) return null;
+    // graded grid with a grid line through every bolt, so each bolt sits on a node (with stiff bolts the load
+    // split is sensitive to where a bolt falls inside an element); target element size h
+    const ne = opt.ne || 32, h = Math.max(Lx, Ly) / ne;
+    const lines = (a0, a1, keys) => {
+      const k = keys.filter(v => v > a0 + 0.25 * h && v < a1 - 0.25 * h).sort((p, q) => p - q);
+      const fix = [a0];
+      k.forEach(v => { if (v - fix[fix.length - 1] >= 0.25 * h) fix.push(v); });
+      if (a1 - fix[fix.length - 1] < 0.25 * h && fix.length > 1) fix.pop();
+      fix.push(a1);
+      const out = [a0];
+      for (let i = 1; i < fix.length; i++) { const m = Math.max(1, Math.round((fix[i] - fix[i - 1]) / h)); for (let s = 1; s <= m; s++) out.push(fix[i - 1] + (fix[i] - fix[i - 1]) * s / m); }
+      return out;
+    };
+    const xs = lines(bb.x0, bb.x1, pts.map(p => p.x)), ys = lines(bb.y0, bb.y1, pts.map(p => p.y));
+    const nx = xs.length - 1, ny = ys.length - 1;
+    const nx1 = nx + 1, nn = nx1 * (ny + 1), two = !!base, dpn = two ? 6 : 3, nd = nn * dpn;
+    const node = (i, j) => j * nx1 + i;
+    const X = i => { const k = Math.floor(i); return k >= nx ? xs[nx] : xs[k] + (i - k) * (xs[k + 1] - xs[k]); };
+    const Y = j => { const k = Math.floor(j); return k >= ny ? ys[ny] : ys[k] + (j - k) * (ys[k + 1] - ys[k]); };
+    const cache = new Map(), elem = (i, j, nv) => {
+      const a = (xs[i + 1] - xs[i]) / 2, b = (ys[j + 1] - ys[j]) / 2, key = a.toFixed(9) + ',' + b.toFixed(9) + ',' + nv;
+      if (!cache.has(key)) cache.set(key, ACM.element(a, b, nv));
+      return cache.get(key);
+    };
+    const act = [], used = new Uint8Array(nn), fOut = [], fHub = [];
+    const frac = (o, i, j) => { let c = 0; for (let a = 0; a < 5; a++) for (let b = 0; b < 5; b++) if (inside(o, X(i + (a + 0.5) / 5), Y(j + (b + 0.5) / 5))) c++; return c / 25; };
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const fo = frac(outline, i, j), on = fo > 0.2;
+      act.push(on); fOut.push(fo); fHub.push(frac(hub, i, j));
+      if (on) [node(i, j), node(i + 1, j), node(i + 1, j + 1), node(i, j + 1)].forEach(q => { used[q] = 1; });
+    }
+    const Dp = tt => E * tt * tt * tt / (12 * (1 - nu * nu));
+    const bw = (nx1 + 2) * dpn;
+    const B = Array.from({ length: nd }, () => new Float64Array(bw + 1)), F = new Array(nd).fill(0);
+    const addK = (gi, gj, v) => { if (gj >= gi) B[gi][gj - gi] += v; };
+    const dofs = (i, j, off) => [node(i, j), node(i + 1, j), node(i + 1, j + 1), node(i, j + 1)].flatMap(q => [q * dpn + off, q * dpn + off + 1, q * dpn + off + 2]);
+    const isHubEl = (i, j) => fHub[j * nx + i] > 0;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      if (!act[j * nx + i]) continue;
+      // stiffness in proportion to the share of the element in the outline and in the hub
+      const e = j * nx + i, d = dofs(i, j, 0), D1 = fOut[e] * ((1 - fHub[e]) * Dp(t) + fHub[e] * Dp((opt.hubF || 3) * t));
+      const el = elem(i, j, nu);
+      for (let a = 0; a < 12; a++) for (let b = 0; b < 12; b++) addK(d[a], d[b], D1 * el.K[a][b]);
+      if (two) {
+        const elB = elem(i, j, base.nu);
+        const db = dofs(i, j, 3), DB = fOut[j * nx + i] * base.E * Math.pow(base.t, 3) / (12 * (1 - base.nu * base.nu));
+        for (let a = 0; a < 12; a++) for (let b = 0; b < 12; b++) addK(db[a], db[b], DB * elB.K[a][b] + (base.support === 'bed' ? base.ks * elB.Kf[a][b] : 0));
+      }
+    }
+    // unused nodes are fixed; a simply supported base has w = 0 on the edge nodes of the outline
+    let big = 0;
+    for (let q = 0; q < nd; q++) big = Math.max(big, B[q][0]);
+    big = big * 1e6 + 1;
+    for (let q = 0; q < nn; q++) if (!used[q]) for (let k = 0; k < dpn; k++) B[q * dpn + k][0] += big;
+    const edge = [];
+    if (two && base.support === 'edges') {
+      const actAt = (i, j) => i >= 0 && j >= 0 && i < nx && j < ny && act[j * nx + i];
+      for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
+        const q = node(i, j);
+        if (used[q] && !(actAt(i - 1, j - 1) && actAt(i, j - 1) && actAt(i - 1, j) && actAt(i, j))) { B[q * dpn + 3][0] += big; edge.push(q); }
+      }
+    }
+    // bolts: springs at the bolt points (interpolated with the element shape functions)
+    const find = (arr, v) => { let i = 0; while (i < arr.length - 2 && v >= arr[i + 1]) i++; return i; };
+    const locate = (x, y) => {
+      const i = find(xs, x), j = find(ys, y);
+      return { i, j, N: elem(i, j, nu).N(x - X(i + 0.5), y - Y(j + 0.5)) };
+    };
+    const bl = pts.map((p, n) => {
+      const L = locate(p.x, p.y), df = dofs(L.i, L.j, 0), db = two ? dofs(L.i, L.j, 3) : null;
+      const g = df.map((q, a) => [q, L.N[a]]).concat(two ? db.map((q, a) => [q, -L.N[a]]) : []);
+      g.forEach(([qa, va]) => g.forEach(([qb, vb]) => addK(qa, qb, kb[n] * va * vb)));
+      return { g, inPlate: inside(outline, p.x, p.y) && act[L.j * nx + L.i] };
+    });
+    // loads on the nodes of the hub, with their resultant exactly at (x_F, y_F)
+    let hn = [];
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) if (used[node(i, j)] && inside(hub, X(i), Y(j))) hn.push({ q: node(i, j), x: X(i), y: Y(j) });
+    if (!hn.length) { const L = locate(xF, yF); hn = [{ q: node(L.i, L.j), x: X(L.i), y: Y(L.j) }]; }
+    const xm = hn.reduce((s, p) => s + p.x, 0) / hn.length, ym = hn.reduce((s, p) => s + p.y, 0) / hn.length;
+    const Mx = Mx0 + Fz * (yF - ym), My = My0 - Fz * (xF - xm);
+    const sxx = hn.reduce((s, p) => s + (p.x - xm) * (p.x - xm), 0), syy = hn.reduce((s, p) => s + (p.y - ym) * (p.y - ym), 0);
+    hn.forEach(p => { F[p.q * dpn] += Fz / hn.length + (syy > 0 ? Mx * (p.y - ym) / syy : 0) - (sxx > 0 ? My * (p.x - xm) / sxx : 0); });
+    if (!(syy > 0)) F[hn[0].q * dpn + 2] += Mx;
+    if (!(sxx > 0)) F[hn[0].q * dpn + 1] -= My;
+    const u = bandSolve(B, F, bw);
+    if (!u) return null;
+    const R = bl.map((b, n) => kb[n] * b.g.reduce((s, [q, v]) => s + v * u[q], 0));
+    // bending stresses at the element centres (von Mises of the plate surface stresses)
+    const stress = (off, tt, Ev, nv, skip) => {
+      let best = { sig: 0, x: 0, y: 0 };
+      const D1 = Ev * tt * tt * tt / (12 * (1 - nv * nv));
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        if (!act[j * nx + i]) continue;
+        const cv = elem(i, j, nv).curv(0, 0);
+        const xc = X(i + 0.5), yc = Y(j + 0.5);
+        if (skip(i, j, xc, yc)) continue;
+        const d = dofs(i, j, off).map(q => u[q]);
+        const kx = cv[0].reduce((s, v, a) => s + v * d[a], 0), ky = cv[1].reduce((s, v, a) => s + v * d[a], 0), kxy = cv[2].reduce((s, v, a) => s + v * d[a], 0);
+        const mx = D1 * (kx + nv * ky), my = D1 * (ky + nv * kx), mxy = D1 * (1 - nv) * kxy;
+        const sx = 6 * mx / (tt * tt), sy = 6 * my / (tt * tt), tx = 6 * mxy / (tt * tt);
+        const sig = Math.sqrt(sx * sx + sy * sy - sx * sy + 3 * tx * tx);
+        if (sig > best.sig) best = { sig, x: xc, y: yc, mx, my, mxy };
+      }
+      return best;
+    };
+    // nominal stresses: read t/2 away from the hub (web toe) and from the bolt-head contact, where the plate
+    // solution is singular (point supports, re-entrant hub corners)
+    const nearBolt = (x, y, tt) => pts.some(p => Math.hypot(x - p.x, y - p.y) < exclR + tt / 2);
+    const hubOff = hub.type === 'disc' ? Object.assign({}, hub, { R: hub.R + t / 2 }) : Object.assign({}, hub, { hx: hub.hx + t / 2, hy: hub.hy + t / 2 });
+    const sF = stress(0, t, E, nu, (i, j, x, y) => isHubEl(i, j) || inside(hubOff, x, y) || nearBolt(x, y, t));
+    const sB = two ? stress(3, base.t, base.E, base.nu, (i, j, x, y) => nearBolt(x, y, base.t)) : null;
+    const wN = Array.from({ length: nn }, (_, q) => (used[q] ? u[q * dpn] : null));
+    const wB = two ? Array.from({ length: nn }, (_, q) => (used[q] ? u[q * dpn + 3] : null)) : null;
+    const wBolt = bl.map(b => b.g.slice(0, 12).reduce((s, [q, v]) => s + v * u[q], 0));
+    return { R, nx, ny, xs, ys, x0: bb.x0, y0: bb.y0, act, used: Array.from(used), wN, wB, wBolt, sF, sB, hubNodes: hn.length, outline, hub, outside: bl.filter(b => !b.inPlate).length, nd, bw };
+  }
+
   // Rigid-flange (bolt group) model. In-plane: direct shear F/n plus torsion Mz·r/Σr². Out of plane:
   //  - 'centroid': joint stays closed, bending about the bolt-group centroid: Fz/n + (Mx·y/Σy² − My·x/Σx²)
   //  - 'heel': flange tips about its edge after opening (prying not included): Fz/n + M·h/Σh², h = distance to the heel line
@@ -321,9 +516,46 @@
       unresisted = method === 'centroid' ? wUn : 0;
       weighted = { K, xG, yG, MxG, MyG, sxx, syy, sxy, wb, wc, Skh2, AS, xS, yS, MzS, J };
     }
-    // flexible flange (rectangular pattern, joint closed): x direction from the beam on elastic supports, y rigid
-    let flex = null;
-    if (stiff && inp.patType === 'rect' && method === 'centroid') {
+    // flexible flange as a plate (any pattern, joint closed), optionally on a flexible base
+    let flex = null, plate = null;
+    const wantPlate = stiff && method === 'centroid' && (inp.patType !== 'rect' || inp.patFlexModel === 'plate');
+    if (wantPlate) {
+      const mat = D.MATERIALS[(inp.plates && inp.plates[0] && inp.plates[0].mat) || 'S235'] || D.MATERIALS.S235;
+      const t = +inp.patFt > 0 ? +inp.patFt : Math.max(0, +(inp.plates && inp.plates[0] && inp.plates[0].t) || 0);
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+      const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+      let outline, hub;
+      const hubA = +inp.patHubX > 0 ? +inp.patHubX : 0, hubB = +inp.patHubY > 0 ? +inp.patHubY : 0;
+      if (inp.patType === 'circle') {
+        const R = Math.max(+inp.patDf || 0, (+inp.patPCD || 0) + 2 * (+inp.patEdge || 15)) / 2;
+        outline = { type: 'disc', x0: 0, y0: 0, R };
+        hub = { type: 'disc', x0: xF, y0: yF, R: (hubA || 0.6 * (+inp.patPCD || 0)) / 2, auto: !hubA };
+      } else {
+        const ed = inp.patType === 'rect' ? 0 : Math.max(0, +inp.patEdge || 15);
+        const ox = inp.patType === 'rect' ? 0 : (xmin + xmax) / 2, oy = inp.patType === 'rect' ? 0 : (ymin + ymax) / 2;
+        const hxO = inp.patType === 'rect' && +inp.patLx > 0 ? +inp.patLx / 2 : (xmax - xmin) / 2 + (ed || Math.max(15, (+inp.patSx || 0) / 2));
+        const hyO = inp.patType === 'rect' && +inp.patLy > 0 ? +inp.patLy / 2 : (ymax - ymin) / 2 + (ed || Math.max(15, (+inp.patSy || 0) / 2));
+        outline = { type: 'rect', x0: ox, y0: oy, hx: hxO, hy: hyO };
+        hub = { type: 'rect', x0: xF, y0: yF, hx: (hubA || 0.4 * Math.max(xmax - xmin, 20)) / 2, hy: (hubB || 0.4 * Math.max(ymax - ymin, 20)) / 2, auto: !hubA && !hubB };
+      }
+      let base = null;
+      if (inp.patBase === 'edges' || inp.patBase === 'bed') {
+        const lastP = inp.plates && inp.plates[inp.plates.length - 1];
+        const bm = D.MATERIALS[inp.joint === 'nut' ? (lastP && lastP.mat) || 'S235' : inp.tapMat || 'S235'] || D.MATERIALS.S235;
+        const bt = +inp.patBt > 0 ? +inp.patBt : (inp.joint === 'nut' ? +(lastP && lastP.t) || 0 : +inp.partT || +inp.engage || 0);
+        base = { t: bt, E: bm.E, nu: 0.3, mat: bm, support: inp.patBase, ks: Math.max(0, +inp.patKs || 0) };
+      }
+      const kb = pts.map((p, i) => (wts ? wts.k[i] : stiff.k));
+      if (t > 0 && (!base || (base.t > 0 && (base.support !== 'bed' || base.ks > 0)))) {
+        const fp = flexPlate(pts, { outline, hub, t, E: mat.E, nu: 0.3, kb, Fz, Mx0, My0, xF, yF, base, exclR: Math.max(stiff.dW ? stiff.dW / 2 : 0, 1) });
+        if (fp) {
+          plate = Object.assign(fp, { t, mat, E: mat.E, base, fAllow: mat.Rp || mat.Rm, brittle: !mat.Rp,
+            bAllow: base ? base.mat.Rp || base.mat.Rm : null, kb });
+          bolts.forEach((bo, i) => { bo.FArigid = bo.FA; bo.FA = fp.R[i]; bo.FAt = Math.max(0, bo.FA); });
+        }
+      }
+    }
+    if (!plate && stiff && inp.patType === 'rect' && method === 'centroid' && inp.patFlexModel !== 'plate') {
       const mat = D.MATERIALS[(inp.plates && inp.plates[0] && inp.plates[0].mat) || 'S235'] || D.MATERIALS.S235;
       const t = +inp.patFt > 0 ? +inp.patFt : Math.max(0, +(inp.plates && inp.plates[0] && inp.plates[0].t) || 0);
       const b = +inp.patLy > 0 ? +inp.patLy : (Math.max(...pts.map(p => p.y)) - Math.min(...pts.map(p => p.y)) + 2 * (+inp.patSy || 20));
@@ -345,9 +577,9 @@
     let critQ = bolts.reduce((a, b) => (b.FQ > a.FQ ? b : a), bolts[0]);
     if (critA.FQ >= critQ.FQ * (1 - 1e-9)) critQ = critA;          // ties: report the max-tension bolt
     const ratio = Math.min(1, Math.max(0, +inp.patR || 0));
-    const rigidMax = flex ? Math.max(0, ...bolts.map(b => b.FArigid)) : null;
+    const rigidMax = flex || plate ? Math.max(0, ...bolts.map(b => b.FArigid)) : null;
     return { n, bolts, method, Fx, Fy, Fz, Mx, My, Mz, Mx0, My0, xF, yF, Sx2, Sy2, Sxy, Sr2, Sh2, det, bx, cy: cy_, lineDir, unresisted,
-      custom: inp.patType === 'custom', cx0: pts.cx, cy0: pts.cy, bad: pts.bad, c, u, Mb, critA, critQ, flex, rigidMax, weighted, mainId,
+      custom: inp.patType === 'custom', cx0: pts.cx, cy0: pts.cy, bad: pts.bad, c, u, Mb, critA, critQ, flex, plate, rigidMax, weighted, mainId,
       FAmax: Math.max(0, critA.FA), FQmax: critQ.FQ, ratio, sameBolt: critA.FQ >= critQ.FQ * (1 - 1e-9),
       compression: bolts.some(b => b.FA < 0) };
   }
@@ -400,10 +632,10 @@
     if (inp.patOn) {
       let stiff = null;
       const wantFlex = !!inp.patFlex;
-      if (wantFlex && inp.patType === 'rect' && inp.patMethod !== 'heel') {
+      if (wantFlex && inp.patMethod !== 'heel') {
         // joint stiffness of one bolt from a plain single-bolt run (closed joint: bolt and parts in parallel)
         const one = calculate(Object.assign({}, inp, { patOn: false, pryOn: false, eccOn: false, nasa: false, FAmax: 0, FAmin: 0, FQ: 0 }));
-        if (one.valid) stiff = { k: 1 / one.res.deltaS + 1 / one.res.deltaP, deltaS: one.res.deltaS, deltaP: one.res.deltaP };
+        if (one.valid) stiff = { k: 1 / one.res.deltaS + 1 / one.res.deltaP, deltaS: one.res.deltaS, deltaP: one.res.deltaP, dW: one.dW };
       }
       // mixed bolt types (custom positions with a size and/or property class per line): weights from each type's
       // joint stiffness and stress area, and a full check of every type under its own highest loads
@@ -465,7 +697,15 @@
         if (inp.mode === 'torque' && pat.groups.some(g => !g.main)) add('info', 'Mixed bolts: the given torque applies to the ' + labelOf(split(mainType)) + ' bolts. The other bolt types are checked tightened to ν = ' + fmtN((+inp.nu || 0.9) * 100, 0) + ' % with their own torque (see the table).');
         if (pat.mixedClass && new Set(pat.groups.map(g => g.size)).size < pat.groups.length) add('info', 'Bolts of the same size but different property class look alike. Mark them (head marking, colour) and keep them apart in assembly, so a weaker bolt cannot end up in a position checked for a stronger one.');
       }
-      if (wantFlex && !pat.flex) add('warn', 'Flexible flange: needs a rectangular pattern with at least two bolt columns along x, the centroid model (joint closed) and a flange thickness. The rigid model is used.');
+      if (wantFlex && !pat.flex && !pat.plate) add('warn', inp.patType === 'rect' && inp.patFlexModel !== 'plate'
+        ? 'Flexible flange: needs a rectangular pattern with at least two bolt columns along x, the centroid model (joint closed) and a flange thickness. The rigid model is used.'
+        : 'Plate flange: needs at least three bolts not on one line, the centroid model (joint closed), a flange thickness' + (inp.patBase && inp.patBase !== 'rigid' ? ', a base thickness' + (inp.patBase === 'bed' ? ' and a bedding modulus k<sub>s</sub>' : '') : '') + '. The rigid model is used.');
+      if (pat.plate) {
+        const PL = pat.plate;
+        if (PL.outside) add('warn', 'Plate flange: ' + PL.outside + ' bolt(s) lie outside the flange outline; enlarge the flange size.');
+        if (PL.hub.auto) add('info', 'Plate flange: the load enters through a stiff ' + (PL.hub.type === 'disc' ? 'hub of Ø ' + fmtN(2 * PL.hub.R, 0) : 'web footprint of ' + fmtN(2 * PL.hub.hx, 0) + ' × ' + fmtN(2 * PL.hub.hy, 0)) + ' mm (estimated); enter the real hub or web size for a better result.');
+        if (PL.base && PL.base.support === 'edges') add('info', 'Flexible base: the base plate is simply supported along the flange outline. A base that is supported further out bends more.');
+      }
       inp = Object.assign({}, inp, { FAmax: pat.FAmax / 1000, FAmin: pat.ratio * pat.FAmax / 1000, FQ: pat.FQmax / 1000 });
       if (pat.n < 2) add('error', 'The bolt pattern needs at least two bolts' + (pat.custom ? ': enter one bolt per line as x, y (mm).' : '.'));
       if (pat.bad && pat.bad.length) add('warn', 'Custom bolt positions: line ' + pat.bad.join(', ') + ' could not be read and is ignored. Enter x, y in mm, one bolt per line, optionally followed by a size and a property class such as M6, 12.9.');
@@ -925,6 +1165,11 @@
     ck('R8', 'Working stress safety S<sub>F</sub> = R<sub>p0.2</sub> / σ<sub>red,B</sub>', SF, '≥ 1.0', SF >= 1.0, false, '', SF);
     if (sigA > 0) ck('R9', 'Fatigue safety S<sub>D</sub> = σ<sub>AS</sub> / σ<sub>a</sub>', SD, '≥ ' + SDreq, SD >= SDreq, SD >= 1.0, '', SD);
     for (const p of pressures) ck('R7', 'Surface pressure: ' + p.where, p.p, '≤ ' + fmtN(p.pG, 0) + ' MPa', p.Sp >= 1.0, p.Sp >= 0.9, 'MPa', p.Sp);
+    if (pat && pat.plate) {
+      const PL = pat.plate;
+      ck('Pattern', 'Flange plate bending (plate model): σ<sub>v,max</sub> outside hub and bolt heads', PL.sF.sig, '≤ ' + (PL.brittle ? 'R<sub>m</sub> ' : 'R<sub>p</sub> ') + fmtN(PL.fAllow, 0) + ' MPa', PL.sF.sig <= PL.fAllow, false, 'MPa', PL.sF.sig > 0 ? PL.fAllow / PL.sF.sig : undefined);
+      if (PL.sB) ck('Pattern', 'Base plate bending (flexible base): σ<sub>v,max</sub> outside bolt heads', PL.sB.sig, '≤ ' + fmtN(PL.bAllow, 0) + ' MPa', PL.sB.sig <= PL.bAllow, false, 'MPa', PL.sB.sig > 0 ? PL.bAllow / PL.sB.sig : undefined);
+    }
     if (pat && pat.flex) {
       const fx = pat.flex;
       ck('Pattern', 'Flange bending (flexible flange): σ = M<sub>max</sub> / W', fx.sig, '≤ ' + (fx.brittle ? 'R<sub>m</sub> ' : 'R<sub>p</sub> ') + fmtN(fx.fAllow, 0) + ' MPa', fx.sig <= fx.fAllow, false, 'MPa', fx.sig > 0 ? fx.fAllow / fx.sig : undefined);
@@ -1175,7 +1420,7 @@
     return dec > 0 ? s.replace(/\.?0+$/, '') || '0' : s;
   }
 
-  const CALC = { calculate, boltPattern, patternBolts, parsePoints, parseStacks, sizeInput, jointParts, normClass, normJoint, JOINT_LABEL, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
+  const CALC = { calculate, flexPlate, bandSolve, boltPattern, patternBolts, parsePoints, parseStacks, sizeInput, jointParts, normClass, normJoint, JOINT_LABEL, threadGeometry, FMzul, torqueK, plateResilience, preloadVsFriction, fmtN, findThread, boltClass, STD_LENGTHS };
   if (typeof module !== 'undefined' && module.exports) module.exports = CALC;
   else root.BJ_CALC = CALC;
 })(typeof window !== 'undefined' ? window : globalThis);

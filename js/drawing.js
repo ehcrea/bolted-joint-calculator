@@ -670,7 +670,52 @@
     return out.join('');
   }
 
+  // plate flange: top view with the deflection map, the hub and the bolt loads (and the base plate beside it)
+  function plateView(r) {
+    const P = r.pat, PL = P && P.plate;
+    if (!PL) return '';
+    const two = !!PL.base;
+    const Lx = PL.xs[PL.nx] - PL.xs[0], Ly = PL.ys[PL.ny] - PL.ys[0];
+    const VW = 460, panW = two ? 205 : 330, panH = 250;
+    const sc = Math.min(panW / Lx, panH / Ly);
+    const VH = Ly * sc + 84;
+    const out = [`<svg viewBox="0 0 ${VW} ${r1(VH)}" role="img" aria-label="Plate flange deflection and bolt loads">`];
+    const all = PL.wN.concat(two ? PL.wB : []).filter(v => v != null);
+    const wM = Math.max(1e-15, ...all.map(Math.abs));
+    const panel = (ox, w, title) => {
+      const X = x => ox + (x - PL.x0) * sc, Y = y => 30 + (PL.y0 + Ly - y) * sc;
+      out.push(`<text x="${r1(ox)}" y="16" class="lbl">${title}</text>`);
+      for (let j = 0; j < PL.ny; j++) for (let i = 0; i < PL.nx; i++) {
+        if (!PL.act[j * PL.nx + i]) continue;
+        const q = [j * (PL.nx + 1) + i, j * (PL.nx + 1) + i + 1, (j + 1) * (PL.nx + 1) + i + 1, (j + 1) * (PL.nx + 1) + i];
+        const v = q.reduce((s, k) => s + (w[k] || 0), 0) / 4, a = Math.min(1, Math.abs(v) / wM);
+        out.push(`<rect x="${r1(X(PL.xs[i]))}" y="${r1(Y(PL.ys[j + 1]))}" width="${r1((PL.xs[i + 1] - PL.xs[i]) * sc)}" height="${r1((PL.ys[j + 1] - PL.ys[j]) * sc)}" shape-rendering="crispEdges" fill="${v >= 0 ? 'var(--accent)' : 'var(--text-3)'}" fill-opacity="${(0.06 + 0.8 * a).toFixed(2)}"/>`);
+      }
+      const o = PL.outline;
+      out.push(o.type === 'disc' ? `<circle cx="${r1(X(o.x0))}" cy="${r1(Y(o.y0))}" r="${r1(o.R * sc)}" fill="none" stroke="currentColor" stroke-opacity=".7"/>`
+        : `<rect x="${r1(X(o.x0 - o.hx))}" y="${r1(Y(o.y0 + o.hy))}" width="${r1(2 * o.hx * sc)}" height="${r1(2 * o.hy * sc)}" fill="none" stroke="currentColor" stroke-opacity=".7"/>`);
+      return { X, Y };
+    };
+    const A = panel(10, PL.wN, 'flange: lift w (darker = more)');
+    const h = PL.hub;
+    out.push(h.type === 'disc' ? `<circle cx="${r1(A.X(h.x0))}" cy="${r1(A.Y(h.y0))}" r="${r1(h.R * sc)}" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>`
+      : `<rect x="${r1(A.X(h.x0 - h.hx))}" y="${r1(A.Y(h.y0 + h.hy))}" width="${r1(2 * h.hx * sc)}" height="${r1(2 * h.hy * sc)}" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>`);
+    out.push(`<text x="${r1(A.X(h.x0))}" y="${r1(A.Y(h.y0) + 4)}" text-anchor="middle" class="force-text">F<tspan baseline-shift="sub" font-size="9">z</tspan></text>`);
+    const B = two ? panel(10 + panW + 30, PL.wB, 'base plate: deflection w') : null;
+    P.bolts.forEach((b, i) => {
+      const crit = P.critA && P.critA.i === b.i;
+      [A, B].filter(Boolean).forEach((T, k) => {
+        out.push(`<circle cx="${r1(T.X(b.x))}" cy="${r1(T.Y(b.y))}" r="4" fill="var(--bg, #fff)" stroke="${crit ? 'var(--error, #c0392b)' : 'currentColor'}" stroke-width="${crit ? 2 : 1}"/>`);
+        if (!k) out.push(`<text x="${r1(T.X(b.x))}" y="${r1(T.Y(b.y) - 7)}" text-anchor="middle" class="lbl">${f(b.FA / 1000, 2)}</text>`);
+      });
+    });
+    out.push(`<text x="10" y="${r1(VH - 24)}" class="lbl">bolt loads F<tspan baseline-shift="sub" font-size="9">A</tspan> in kN, red ring = most loaded bolt</text>`);
+    out.push(`<text x="10" y="${r1(VH - 8)}" class="lbl">blue = lifts, grey = moves down; dashed = hub / web with F<tspan baseline-shift="sub" font-size="9">z</tspan></text>`);
+    out.push('</svg>');
+    return out.join('');
+  }
+
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 
-  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView, eccCurve, flexView };
+  root.BJ_DRAW = { jointSection, jointDiagram, threadDetail, frictionChart, torqueBar, patternView, pryView, eccView, eccCurve, flexView, plateView };
 })(window);

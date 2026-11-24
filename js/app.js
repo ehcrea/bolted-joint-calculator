@@ -216,7 +216,13 @@
       ecc: !!state.eccOn,
       pat: !!state.patOn, 'no-pat': !state.patOn,
       'pat-circle': state.patType === 'circle' || !state.patType, 'pat-rect': state.patType === 'rect', 'pat-custom': state.patType === 'custom',
-      'pat-flex': !!state.patOn && state.patType === 'rect' && !!state.patFlex,
+      'pat-flex': !!state.patOn && !!state.patFlex,
+      'pat-flex-rect': !!state.patOn && !!state.patFlex && state.patType === 'rect',
+      'pat-plate': !!state.patOn && !!state.patFlex && (state.patType !== 'rect' || state.patFlexModel === 'plate'),
+      'pat-plate-disc': state.patType === 'circle' || !state.patType,
+      'pat-plate-box': !!state.patOn && !!state.patFlex && (state.patType === 'custom' || (state.patType === 'rect' && state.patFlexModel === 'plate')),
+      'pat-base': !!state.patOn && !!state.patFlex && (state.patType !== 'rect' || state.patFlexModel === 'plate') && !!state.patBase && state.patBase !== 'rigid',
+      'pat-bed': !!state.patOn && !!state.patFlex && (state.patType !== 'rect' || state.patFlexModel === 'plate') && state.patBase === 'bed',
     };
     $$('[data-show]').forEach(el => { el.hidden = !el.dataset.show.split(' ').some(t => show[t]); });
     $('#engage-title').textContent = { tapped: 'Tapped part', helicoil: 'Heli-Coil (wire thread insert)', insert: 'Solid threaded insert' }[state.joint] || '';
@@ -409,9 +415,10 @@
     card.hidden = !P;
     if (!P) return;
     $('#pat-view').innerHTML = DR.patternView(r, state);
-    const FX = P.flex;
-    $('#pat-badge').textContent = P.n + ' bolts · ' + (FX ? 'flexible flange' : P.method === 'heel' ? 'heel model' : 'centroid model');
-    $('#pat-note').innerHTML = (FX ? 'Flexible-flange model along x (beam on elastic bolt supports), rigid along y' : 'Rigid-flange (bolt group) model') +
+    const FX = P.flex, PL = P.plate;
+    $('#pat-badge').textContent = P.n + ' bolts · ' + (PL ? 'plate flange' + (PL.base ? ' on a flexible base' : '') : FX ? 'flexible flange' : P.method === 'heel' ? 'heel model' : 'centroid model');
+    $('#pat-note').innerHTML = (PL ? 'Plate-flange model (Kirchhoff plate on elastic bolt supports' + (PL.base ? ', on a ' + (PL.base.support === 'bed' ? 'bedded' : 'edge-supported') + ' base plate' : '') + ')'
+      : FX ? 'Flexible-flange model along x (beam on elastic bolt supports), rigid along y' : 'Rigid-flange (bolt group) model') +
       ': tension from F<sub>z</sub> and bending, shear from F<sub>x</sub>, F<sub>y</sub> and torsion. The most loaded bolt (red ring) is checked in all results below.';
     const MX = !!P.mixed;
     const head = '<thead><tr><th class="left">Bolt</th>' + (MX ? '<th class="left">Type</th>' : '') + '<th>x (mm)</th><th>y (mm)</th><th>Tension F<sub>A</sub> (kN)</th>' + (FX ? '<th>Rigid model (kN)</th>' : '') + (MX && P.weighted ? '<th>Equal sharing (kN)</th>' : '') + '<th>Shear F<sub>Q</sub> (kN)</th></tr></thead>';
@@ -436,6 +443,28 @@
           `<td>${g.main ? '' : `<button type="button" class="btn-link" data-detail="${g.type}">Check in detail</button>`}</td></tr>`;
       }).join('');
       $('#pat-size-table').innerHTML = hd + '<tbody>' + rowsS + '</tbody>';
+    }
+    $('#pat-plate').hidden = !PL;
+    if (PL) {
+      $('#pat-plate-view').innerHTML = DR.plateView(r);
+      const inc = P.rigidMax > 0 ? P.FAmax / P.rigidMax : NaN;
+      const wmax = Math.max(...PL.wN.filter(v => v != null).map(Math.abs));
+      const st = (s, allow, mat, brittle) => f(s.sig, 0) + ' MPa' + '|' + (s.sig <= allow ? '≤ ' + f(allow, 0) + ' MPa (' + mat.label + '), at (' + f(s.x, 0) + ', ' + f(s.y, 0) + ') mm' : '<span class="status error">above ' + (brittle ? 'R<sub>m</sub>' : 'R<sub>p</sub>') + ' ' + f(allow, 0) + ' MPa</span>');
+      const sF = st(PL.sF, PL.fAllow, PL.mat, PL.brittle).split('|');
+      const items = [
+        ['Most loaded bolt', f(P.FAmax / 1000, 2) + ' kN', isFinite(inc) ? f(inc, 2) + '× the rigid model (' + f(P.rigidMax / 1000, 2) + ' kN)' : ''],
+        ['Joint stiffness per bolt k', f(PL.kb[0] / 1000, 0) + ' kN/mm', P.mixed ? 'per bolt type, joint closed' : '1/δ<sub>S</sub> + 1/δ<sub>P</sub> (joint closed)'],
+        ['Flange plate', 't = ' + f(PL.t, 1) + ' mm', PL.mat.label + ', E = ' + f(PL.E, 0) + ' MPa; mesh ' + PL.nx + ' × ' + PL.ny],
+        ['Flange bending stress σ<sub>v</sub>', sF[0], sF[1]],
+        ['Max flange deflection', f(wmax * 1000, 1) + ' µm', PL.base ? 'absolute; the base moves too' : 'relative to the rigid base'],
+      ];
+      if (PL.base) {
+        const sB = st(PL.sB, PL.bAllow, PL.base.mat, !PL.base.mat.Rp).split('|');
+        const wbm = Math.max(...PL.wB.filter(v => v != null).map(Math.abs));
+        items.push(['Base plate', 't = ' + f(PL.base.t, 1) + ' mm', PL.base.mat.label + (PL.base.support === 'bed' ? ', bed k<sub>s</sub> = ' + f(PL.base.ks, 3) + ' N/mm³' : ', simply supported along the edge')],
+          ['Base bending stress σ<sub>v</sub>', sB[0], sB[1]], ['Max base deflection', f(wbm * 1000, 1) + ' µm', '']);
+      }
+      $('#pat-plate-metrics').innerHTML = metrics(items);
     }
     $('#pat-flex').hidden = !FX;
     if (FX) {
@@ -516,6 +545,16 @@
           ['Beam on ' + FX.cols.length + ' spring supports (n<sub>col</sub>·k), F<sub>z</sub> at x<sub>F</sub> = ' + N(PT.xF, 1) + ' mm, M<sub>y</sub> = ' + mm(PT.My0) + ' N·m', 'column x = ' + N(cc.x, 1) + ' mm: R = k<sub>col</sub>·w = ' + N(cc.k / 1000, 0) + '·' + N(cc.w * 1000, 2) + ' µm', kN(cc.R)],
           ['F<sub>A,i</sub> = R<sub>col</sub>/n<sub>col</sub> + M<sub>x</sub>·y<sub>i</sub>/Σy²', 'bolt ' + cb.i + ': ' + kN(cc.R) + '/' + cc.idx.length + ' + ' + mm(PT.Mx) + '·' + N(cb.y, 1) + '/' + N(PT.Sy2, 0), kN(cb.FA) + ' (rigid ' + kN(cb.FArigid) + ')'],
           ['σ = M<sub>max</sub> / (L<sub>y</sub>·t²/6)', N(FX.Mmax / 1000, 1) + ' N·m at x = ' + N(FX.xM, 1) + ' mm', N(FX.sig, 0) + ' MPa']);
+      }
+      if (PT.plate) {
+        const PL = PT.plate;
+        rows.splice(rows.length - 2, 0,
+          ['k<sub>i</sub> = 1/δ<sub>S</sub> + 1/δ<sub>P</sub> (per bolt, joint closed)', PT.stiff ? '1/' + sci(PT.stiff.deltaS) + ' + 1/' + sci(PT.stiff.deltaP) : '', N(PL.kb[0] / 1000, 0) + ' kN/mm' + (PT.mixed ? ' (bolt 1)' : '')],
+          ['D = E·t³/(12(1 − ν²)) (Kirchhoff plate, ACM elements, ' + PL.nx + ' × ' + PL.ny + ')', N(PL.E, 0) + '·' + N(PL.t, 1) + '³/(12·0.91)', sci(PL.E * Math.pow(PL.t, 3) / 10.92) + ' N·mm'] ,
+          PL.base ? ['Base plate D<sub>B</sub> = E<sub>B</sub>·t<sub>B</sub>³/(12(1 − ν²)), ' + (PL.base.support === 'bed' ? 'on a Winkler bed k<sub>s</sub>' : 'simply supported along the edge'), N(PL.base.E, 0) + '·' + N(PL.base.t, 1) + '³/10.92' + (PL.base.support === 'bed' ? ', k<sub>s</sub> = ' + N(PL.base.ks, 3) + ' N/mm³' : ''), sci(PL.base.E * Math.pow(PL.base.t, 3) / 10.92) + ' N·mm'] : null,
+          ['F<sub>A,i</sub> = k<sub>i</sub>·(w<sub>flange</sub> − w<sub>base</sub>) at the bolt; loads through the ' + (PL.hub.type === 'disc' ? 'hub Ø ' + N(2 * PL.hub.R, 0) : 'web ' + N(2 * PL.hub.hx, 0) + ' × ' + N(2 * PL.hub.hy, 0)) + ' mm at (x<sub>F</sub>, y<sub>F</sub>)', 'bolt ' + PT.critA.i + ': ' + N(PL.kb[PT.critA.i - 1] / 1000, 0) + ' kN/mm · ' + N(PT.critA.FA / PL.kb[PT.critA.i - 1] * 1000, 2) + ' µm', kN(PT.critA.FA) + ' (rigid ' + kN(PT.critA.FArigid) + ')'],
+          ['σ<sub>v</sub> = √(σ<sub>x</sub>² + σ<sub>y</sub>² − σ<sub>x</sub>σ<sub>y</sub> + 3τ²), σ = 6m/t², t/2 away from hub and bolt heads', 'flange at (' + N(PL.sF.x, 0) + ', ' + N(PL.sF.y, 0) + ') mm' + (PL.sB ? '; base at (' + N(PL.sB.x, 0) + ', ' + N(PL.sB.y, 0) + ') mm' : ''), N(PL.sF.sig, 0) + ' MPa' + (PL.sB ? ', ' + N(PL.sB.sig, 0) + ' MPa' : '')]);
+        for (let i = rows.length - 1; i >= 0; i--) if (!rows[i]) rows.splice(i, 1);
       }
       if (PT.custom && !PT.flex) rows.splice(1, 0, ['Centroid C = mean of the bolt positions; F<sub>z</sub> offset → M<sub>x</sub> += F<sub>z</sub>·y<sub>F</sub>, M<sub>y</sub> −= F<sub>z</sub>·x<sub>F</sub> (from C)', 'x<sub>F</sub>, y<sub>F</sub> = ' + N(PT.xF, 1) + ', ' + N(PT.yF, 1) + ' mm', '(' + N(PT.cx0, 1) + ', ' + N(PT.cy0, 1) + ') mm']);
       if (PT.weighted) {

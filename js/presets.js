@@ -14,7 +14,7 @@
     nFSy: 1.25, nFSu: 1.4, nFSsep: 1.2, nFSslip: 1.2, nFF: 1.15,
     patOn: false, patType: 'circle', patMethod: 'centroid', patN: 6, patPCD: 100, patAngle: 90, patDf: 130,
     patNx: 2, patNy: 2, patSx: 80, patSy: 60, patPerimeter: true, patLx: 110, patLy: 90,
-    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0, patXF: 0, patYF: 0, patFlex: false, patFt: '', patPts: '', patStacks: '', patEdge: 15, partT: '',
+    patFx: 0, patFy: 0, patFz: 0, patMx: 0, patMy: 0, patMz: 0, patR: 0, patXF: 0, patYF: 0, patFlex: false, patFlexModel: 'beam', patFt: '', patHubX: '', patHubY: '', patBase: 'rigid', patBt: '', patKs: 0.2, patPts: '', patStacks: '', patEdge: 15, partT: '',
     pryOn: false, pryA: 30, pryB: 25, pryW: 60, pryT: '', pryUlt: 'none', pryGamma: 1.5, pryR: '',
     eccOn: false, eccC: 50, eccB: 40, eccS: 0, eccA: 0, eccU: '', eccMB: 0, eccI: '', eccOpen: false,
   };
@@ -127,6 +127,13 @@
       nu: 0.9, FQ: 0, n: 0.5,
       patOn: true, patType: 'rect', patNx: 5, patNy: 1, patSx: 60, patSy: 0, patLx: 280, patLy: 40, patPerimeter: false,
       patFz: 12, patXF: 90, patR: 0, patFlex: true } },
+    { id: 'pat-plate-base', label: 'M12 8.8, 6-bolt base plate (plate flange) on a flexible frame plate, offset column load', s: {
+      joint: 'nut', thread: 'M12', cls: '8.8', head: 'hex', washer: '7089', washerGrade: '200HV', washerNut: true,
+      plates: [{ mat: 'S235', t: 15 }, { mat: 'S235', t: 20 }], rough: 'medium', friction: 'zn-flake', method: 'tw-test',
+      nu: 0.9, FQ: 0, n: 0.5,
+      patOn: true, patType: 'rect', patNx: 3, patNy: 2, patSx: 120, patSy: 140, patLx: 300, patLy: 200, patPerimeter: false,
+      patFz: 30, patMx: 1500, patFx: 3, patXF: 30, patR: 0, patFlex: true, patFlexModel: 'plate', patHubX: 100, patHubY: 100,
+      patBase: 'edges', patBt: 20 } },
     { id: 'pat-bracket', label: 'M6 8.8, 4-bolt bracket into aluminium (Heli-Coil), overhanging load', s: {
       joint: 'helicoil', thread: 'M6', cls: '8.8', head: 'shcs', washer: '7089', washerGrade: '300HV',
       plates: [{ mat: 'S235', t: 8 }], tapMat: '6061T6', hcLen: 1.5, rough: 'fine', friction: 'oxide-oil', method: 'tw-test',

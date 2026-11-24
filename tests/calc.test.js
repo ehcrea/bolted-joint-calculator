@@ -493,7 +493,72 @@ ok(C.boltClass('8.8', 20).Rp === 660 && C.boltClass('8.8', 16).Rp === 640, '8.8 
   const two = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patNy: 2, patSy: 30, patYF: 10 }))).pat;
   near(two.bolts.reduce((s, b) => s + b.FA * b.y, 0), 12000 * 10, 1e-9, 'two rows: M_x from y_F shared rigidly');
   const circ = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patType: 'circle' })));
-  ok(!circ.pat.flex && circ.issues.some(i => /Flexible flange/.test(i.text)), 'circular pattern: flexible model not available, warned');
+  ok(!circ.pat.flex && circ.pat.plate, 'circular pattern: plate model instead of the beam');
+  const row = C.calculate(stateFrom(Object.assign({}, base, { patFlex: true, patFlexModel: 'plate' })));
+  ok(!row.pat.plate && row.issues.some(i => /Plate flange: needs at least three bolts not on one line/.test(i.text)), 'plate model with one bolt row: rigid model, warned');
+}
+
+// ---- plate flange (2-D) and flexible base ----
+{
+  const base = { thread: 'M10', cls: '8.8', plates: [{ mat: 'S235', t: 12 }, { mat: 'S235', t: 20 }], FQ: 0,
+    patOn: true, patType: 'rect', patNx: 3, patNy: 2, patSx: 80, patSy: 80, patLx: 220, patLy: 140, patPerimeter: false,
+    patFz: 30, patXF: 40, patYF: 10, patMx: 200, patMy: -150, patR: 0, patFlex: true, patFlexModel: 'plate' };
+  const rig = C.calculate(stateFrom(Object.assign({}, base, { patFlex: false }))).pat;
+  const sumF = p => p.bolts.reduce((s, b) => s + b.FA, 0), sumX = p => p.bolts.reduce((s, b) => s + b.FA * b.x, 0), sumY = p => p.bolts.reduce((s, b) => s + b.FA * b.y, 0);
+  const eq = (p, lab) => {
+    near(sumF(p), 30000, 1e-9, lab + ': Σ F_A = F_z');
+    near(sumY(p), sumY(rig), 1e-9, lab + ': Σ F_A·y = M_x + F_z·y_F');
+    near(sumX(p), sumX(rig), 1e-9, lab + ': Σ F_A·x = −M_y + F_z·x_F');
+  };
+  const pl = C.calculate(stateFrom(base));
+  ok(pl.pat.plate && !pl.pat.flex, 'plate model chosen');
+  eq(pl.pat, 'plate');
+  const dev = p => Math.max(...p.bolts.map(b => Math.abs(b.FA - b.FArigid)));
+  ok(dev(pl.pat) > 0.1 * rig.FAmax, 'plate: load split differs from the rigid model');
+  pl.pat.bolts.forEach((b, i) => near(b.FArigid, rig.bolts[i].FA, 1e-12, 'plate: rigid comparison stored, bolt ' + b.i));
+  ok(pl.checks.some(c => /Flange plate bending/.test(c.label)) && !pl.checks.some(c => /Base plate bending/.test(c.label)), 'plate: flange check, no base check on a rigid base');
+  const stiff = C.calculate(stateFrom(Object.assign({}, base, { patFt: 3000 }))).pat;
+  stiff.bolts.forEach((b, i) => near(b.FA, rig.bolts[i].FA, 2e-3, 'very stiff plate approaches the rigid model, bolt ' + b.i));
+  const thin = C.calculate(stateFrom(Object.assign({}, base, { patFt: 6 }))).pat;
+  ok(thin.plate.sF.sig > 2 * pl.pat.plate.sF.sig && dev(thin) > dev(pl.pat), 'thinner plate: higher stress, further from the rigid model');
+  // symmetric load on a symmetric pattern
+  const sym = C.calculate(stateFrom(Object.assign({}, base, { patXF: 0, patYF: 0, patMx: 0, patMy: 0 }))).pat;
+  sym.bolts.forEach(b => near(b.FA, sym.bolts.find(o => Math.abs(o.x + b.x) < 1e-9 && Math.abs(o.y + b.y) < 1e-9).FA, 1e-6, 'symmetric plate: point-symmetric bolt loads, bolt ' + b.i));
+  // circular flange, load at the centre: all bolts equal
+  const circ = C.calculate(stateFrom(Object.assign({}, base, { patType: 'circle', patN: 8, patPCD: 160, patDf: 200, patXF: 0, patYF: 0, patMx: 0, patMy: 0 }))).pat;
+  circ.bolts.forEach(b => near(b.FA, 30000 / 8, 0.04, 'circular plate, central load: F_z/n within the mesh scatter, bolt ' + b.i));
+  const circM = C.calculate(stateFrom(Object.assign({}, base, { patType: 'circle', patN: 8, patPCD: 160, patDf: 200, patXF: 0, patYF: 0 }))).pat;
+  near(sumY(circM), 200000, 1e-9, 'circular plate: Σ F_A·y = M_x');
+  // flexible base: limits and equilibrium
+  const bedStiff = C.calculate(stateFrom(Object.assign({}, base, { patBase: 'bed', patKs: 1e5, patBt: 20 }))).pat;
+  bedStiff.bolts.forEach((b, i) => ok(Math.abs(b.FA - pl.pat.bolts[i].FA) < 30, 'very stiff bed: rigid-base result, bolt ' + b.i));
+  const edgeStiff = C.calculate(stateFrom(Object.assign({}, base, { patBase: 'edges', patBt: 2000 }))).pat;
+  edgeStiff.bolts.forEach((b, i) => ok(Math.abs(b.FA - pl.pat.bolts[i].FA) < 30, 'very thick edge-supported base: rigid-base result, bolt ' + b.i));
+  const soft = C.calculate(stateFrom(Object.assign({}, base, { patBase: 'bed', patKs: 2, patBt: 20 })));
+  eq(soft.pat, 'soft bed');
+  ok(soft.pat.plate.sB && soft.checks.some(c => /Base plate bending/.test(c.label)), 'flexible base: base bending check');
+  const edges = C.calculate(stateFrom(Object.assign({}, base, { patBase: 'edges', patBt: 15 })));
+  eq(edges.pat, 'edge-supported base');
+  ok(edges.issues.some(i => /simply supported along the flange outline/.test(i.text)), 'edge-supported base: note');
+  ok(C.calculate(stateFrom(Object.assign({}, base, { patBase: 'bed', patKs: 0, patBt: 20 }))).issues.some(i => /bedding modulus/.test(i.text)), 'bed without k_s: rigid model, warned');
+  // custom positions, load right on bolt 1: bolt 1 takes nearly everything
+  const cu = C.calculate(stateFrom(Object.assign({}, base, { patType: 'custom', patPts: '0,0\n100,0\n100,80\n0,80', patXF: 0, patYF: 0, patMx: 0, patMy: 0 }))).pat;
+  ok(cu.plate && cu.bolts[0].FA > 0.9 * 30000, 'custom plate: load over bolt 1 goes into bolt 1');
+  near(sumF(cu), 30000, 1e-9, 'custom plate: Σ F_A = F_z');
+  // mesh convergence of the bolt loads
+  const pts = [-80, 0, 80].flatMap(x => [-40, 40].map(y => ({ x, y })));
+  const run = ne => C.flexPlate(pts, { outline: { type: 'rect', x0: 0, y0: 0, hx: 110, hy: 70 }, hub: { type: 'rect', x0: 40, y0: 10, hx: 20, hy: 20 }, t: 12, E: 210000, nu: 0.3, kb: pts.map(() => 1e6), Fz: 30000, Mx0: 0, My0: 0, xF: 40, yF: 10, base: null, exclR: 8, ne });
+  const r24 = run(32), r48 = run(64);
+  r24.R.forEach((v, i) => ok(Math.abs(v - r48.R[i]) < 0.03 * 30000 / 6 * 6 * 0.1 + 0.03 * Math.abs(r48.R[i]), 'mesh 32 vs 64 within 3 %, bolt ' + (i + 1)));
+  near(r24.sF.sig, r48.sF.sig, 0.2, 'mesh 32 vs 64: nominal stress within 20 %');
+  // banded Cholesky against a dense solve
+  const n = 7, bw = 2, A = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 4 + i : Math.abs(i - j) <= bw ? 1 / (1 + i + j) : 0)));
+  const B = A.map((r, i) => Float64Array.from({ length: bw + 1 }, (_, k) => (i + k < n ? r[i + k] : 0)));
+  const x = C.bandSolve(B, [1, 2, 3, 4, 5, 6, 7], bw);
+  A.forEach((r, i) => near(r.reduce((s, v, j) => s + v * x[j], 0), i + 1, 1e-12, 'banded Cholesky: A·x = b, row ' + i));
+  // the example
+  const ex = C.calculate(stateFrom(P.PRESETS.find(e => e.id === 'pat-plate-base').s));
+  ok(ex.pat.plate && ex.pat.plate.base && ex.status !== 'error', 'plate base example: plate on a flexible base, passes');
 }
 
 // ---- eccentric clamping and loading ----
